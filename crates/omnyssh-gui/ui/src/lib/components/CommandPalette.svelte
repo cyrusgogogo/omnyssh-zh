@@ -10,9 +10,10 @@
   import { statuses } from '$lib/stores/statuses';
   import { sessions, sessionLabel, sessionStatusDot } from '$lib/stores/sessions';
   import { activeEntity } from '$lib/stores/activeEntity';
-  import { spawnSession } from '$lib/stores/navigation';
+  import { openHostSession } from '$lib/stores/navigation';
   import { streamerMode, displayHostname } from '$lib/stores/streamer';
   import { isPaletteChord } from '$lib/stores/ui';
+  import { t } from '$lib/i18n';
 
   let inputEl = $state<HTMLInputElement>();
   let listEl = $state<HTMLUListElement>();
@@ -27,16 +28,16 @@
   const firstHost = $derived(items.findIndex((it) => it.kind === 'host'));
 
   const placeholder = $derived(
-    $palette.mode === 'pickHost' ? 'Pick a host…' : 'Search hosts and sessions…'
+    $palette.mode === 'pickHost' ? $t('palette-pick-placeholder') : $t('palette-search-placeholder')
   );
   const emptyMessage = $derived(
     $palette.mode === 'pickHost'
       ? query
-        ? 'No matching hosts.'
-        : 'No hosts configured.'
+        ? $t('palette-no-host-matches')
+        : $t('palette-no-hosts')
       : query
-        ? 'No matches.'
-        : 'No hosts or sessions yet.'
+        ? $t('palette-no-matches')
+        : $t('palette-empty')
   );
 
   // Focus returns here when the overlay closes, so a keyboard user is not dropped to
@@ -85,7 +86,7 @@
       palette.choose(item.host);
     } else {
       // Navigator default action for a host: open a shell (the primary connect path).
-      spawnSession('terminal', item.host.name);
+      openHostSession('terminal', item.host.name);
       palette.close();
     }
   }
@@ -146,12 +147,12 @@
     class="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[14vh]"
     role="dialog"
     aria-modal="true"
-    aria-label={$palette.mode === 'pickHost' ? 'Pick a host' : 'Command palette'}
+    aria-label={$palette.mode === 'pickHost' ? $t('palette-pick-title') : $t('nav-command-palette')}
   >
     <button
       type="button"
       tabindex="-1"
-      aria-label="Dismiss"
+      aria-label={$t('common-close')}
       class="absolute inset-0 bg-overlay"
       onclick={() => palette.close()}
     ></button>
@@ -181,10 +182,10 @@
                unique, so a name key could throw each_key_duplicate. -->
           {#each items as item, i (i)}
             {#if $palette.mode === 'navigate' && i === firstSession}
-              <li class={sectionHead}>Sessions</li>
+              <li class={sectionHead}>{$t('palette-sessions')}</li>
             {/if}
             {#if $palette.mode === 'navigate' && i === firstHost}
-              <li class={sectionHead}>Hosts</li>
+              <li class={sectionHead}>{$t('palette-hosts')}</li>
             {/if}
             <li>
               <button
@@ -215,9 +216,9 @@
       <div
         class="flex items-center gap-4 border-t border-default px-4 py-2 font-mono text-[11px] text-faint"
       >
-        <span>↑↓ navigate</span>
-        <span>↵ select</span>
-        <span>esc close</span>
+        <span>{$t('palette-navigate-hint')}</span>
+        <span>{$t('palette-select-hint')}</span>
+        <span>{$t('palette-close-hint')}</span>
       </div>
     </div>
   </div>

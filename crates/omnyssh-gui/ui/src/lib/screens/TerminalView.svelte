@@ -34,7 +34,8 @@
     '"Symbols Nerd Font Mono", "Symbols Nerd Font", "MesloLGS NF", ' +
     '"JetBrainsMono Nerd Font Mono", "JetBrainsMono Nerd Font", ' +
     '"Hack Nerd Font Mono", "Hack Nerd Font", ' +
-    '"FiraCode Nerd Font Mono", "FiraCode Nerd Font"';
+    '"FiraCode Nerd Font Mono", "FiraCode Nerd Font", ' +
+    '"Noto Sans Mono CJK SC", "Sarasa Mono SC", "PingFang SC", "Microsoft YaHei"';
   // One encoder for the keystroke hot path instead of one per input event.
   const ENCODER = new TextEncoder();
 

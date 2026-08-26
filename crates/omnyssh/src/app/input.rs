@@ -19,6 +19,31 @@ impl App {
             return Ok(None);
         }
 
+        if let Some(popup) = &mut self.view.language_popup {
+            match key.code {
+                KeyCode::Esc => self.view.language_popup = None,
+                KeyCode::Up | KeyCode::Char('k') => {
+                    popup.selected = popup.selected.saturating_sub(1);
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    popup.selected = (popup.selected + 1).min(LanguagePopup::PREFERENCES.len() - 1);
+                }
+                KeyCode::Enter => {
+                    let preference = LanguagePopup::PREFERENCES[popup.selected].to_string();
+                    self.view.language_popup = None;
+                    return Ok(Some(AppAction::ApplyLanguage(preference)));
+                }
+                _ => {}
+            }
+            return Ok(None);
+        }
+
+        if self.view.keybindings.language.matches(key) {
+            self.view.language_popup =
+                Some(LanguagePopup::from_preference(&self.config.ui.language));
+            return Ok(None);
+        }
+
         let screen = self.state.read().await.screen.clone();
 
         // ----------------------------------------------------------------

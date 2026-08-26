@@ -7,6 +7,7 @@
   import { Icon } from '$lib/theme';
   import type { FileEntryDto } from '$lib/bindings';
   import { formatBytes, type Pane } from '$lib/stores/sftp';
+  import { t } from '$lib/i18n';
 
   let {
     title,
@@ -51,9 +52,9 @@
     {#if pane.error}
       <p class="px-2 py-6 text-center text-sm text-status-crit">{pane.error}</p>
     {:else if pane.loading && pane.entries.length === 0}
-      <p class="px-2 py-6 text-center text-sm text-faint">Loading…</p>
+      <p class="px-2 py-6 text-center text-sm text-faint">{$t('common-loading')}</p>
     {:else if pane.entries.length === 0}
-      <p class="px-2 py-6 text-center text-sm text-faint">Empty directory</p>
+      <p class="px-2 py-6 text-center text-sm text-faint">{$t('files-empty-directory')}</p>
     {:else}
       <ul class="space-y-0.5">
         {#each pane.entries as entry, i (i)}
@@ -67,7 +68,7 @@
                 type="button"
                 role="checkbox"
                 aria-checked={marked}
-                aria-label="Mark {entry.name}"
+                aria-label={$t('files-mark-name', { name: entry.name })}
                 class="grid h-4 w-4 shrink-0 place-items-center rounded border transition
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus
                   {marked ? 'border-accent bg-accent text-accent-fg' : 'border-strong text-transparent'}"

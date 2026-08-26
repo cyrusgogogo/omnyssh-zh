@@ -25,10 +25,8 @@ pub fn render(frame: &mut Frame, state: &AppState, view: &ViewState) {
     // Check minimum terminal size.
     let area = frame.area();
     if area.width < 80 || area.height < 24 {
-        let msg = ratatui::widgets::Paragraph::new(
-            "Terminal too small — please resize to at least 80×24.",
-        )
-        .style(ratatui::style::Style::default().fg(ratatui::style::Color::Red));
+        let msg = ratatui::widgets::Paragraph::new(crate::i18n::tr("terminal-too-small"))
+            .style(ratatui::style::Style::default().fg(ratatui::style::Color::Red));
         frame.render_widget(msg, area);
         return;
     }
@@ -82,6 +80,10 @@ pub fn render(frame: &mut Frame, state: &AppState, view: &ViewState) {
     // Render help popup on top if requested.
     if view.show_help {
         popup::render_help(frame, &view.theme);
+    }
+
+    if let Some(language_popup) = &view.language_popup {
+        popup::render_language(frame, language_popup, &view.theme);
     }
 
     // The startup update popup sits above everything else.

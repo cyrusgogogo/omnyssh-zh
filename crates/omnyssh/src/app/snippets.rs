@@ -373,7 +373,7 @@ impl App {
                 ..
             }) => {
                 if selected_host_indices.is_empty() {
-                    self.view.status_message = Some("No hosts selected.".to_string());
+                    self.view.status_message = Some(crate::i18n::tr("status-no-hosts-selected"));
                     return;
                 }
                 let host_names: Vec<String> = {
@@ -528,11 +528,14 @@ impl App {
                     let state = self.state.read().await;
                     let q = self.view.snippets_view.search_query.clone();
                     self.view.snippets_view.rebuild_filter(&state.snippets, &q);
-                    self.view.status_message = Some("Snippet added.".to_string());
+                    self.view.status_message = Some(crate::i18n::tr("status-snippet-added"));
                 }
                 Err(e) => {
                     self.view.snippets_view.popup = Some(SnippetPopup::Add(form));
-                    self.view.status_message = Some(format!("Error: {e}"));
+                    self.view.status_message = Some(crate::i18n::tr_args(
+                        "detail-failed",
+                        &[("error", &e.to_string())],
+                    ));
                 }
             },
 
@@ -548,11 +551,14 @@ impl App {
                     let state = self.state.read().await;
                     let q = self.view.snippets_view.search_query.clone();
                     self.view.snippets_view.rebuild_filter(&state.snippets, &q);
-                    self.view.status_message = Some("Snippet updated.".to_string());
+                    self.view.status_message = Some(crate::i18n::tr("status-snippet-updated"));
                 }
                 Err(e) => {
                     self.view.snippets_view.popup = Some(SnippetPopup::Edit { snippet_idx, form });
-                    self.view.status_message = Some(format!("Error: {e}"));
+                    self.view.status_message = Some(crate::i18n::tr_args(
+                        "detail-failed",
+                        &[("error", &e.to_string())],
+                    ));
                 }
             },
 
@@ -569,7 +575,10 @@ impl App {
                 let mut state = self.state.write().await;
                 if idx < state.snippets.len() {
                     let removed = state.snippets.remove(idx);
-                    self.view.status_message = Some(format!("Deleted snippet '{}'.", removed.name));
+                    self.view.status_message = Some(crate::i18n::tr_args(
+                        "status-snippet-deleted",
+                        &[("name", &removed.name)],
+                    ));
                 }
             }
             self.save_snippets().await;
@@ -583,7 +592,10 @@ impl App {
     async fn save_snippets(&mut self) {
         let snippets = self.state.read().await.snippets.clone();
         if let Err(e) = config::snippets::save_snippets(&snippets) {
-            self.view.status_message = Some(format!("Save failed: {e}"));
+            self.view.status_message = Some(crate::i18n::tr_args(
+                "status-save-failed",
+                &[("error", &e.to_string())],
+            ));
         }
     }
 }

@@ -3,11 +3,13 @@
   // `formToSnippet`; on submit the parent persists + refreshes, and a rejected save
   // surfaces inline without closing. Semantic tokens only.
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import type { SnippetDto } from '$lib/bindings';
   import { Button } from '$lib/theme';
   import Modal from '$lib/components/Modal.svelte';
   import Select from '$lib/components/Select.svelte';
   import { formToSnippet, type SnippetFormFields } from './snippetForm';
+  import { t } from '$lib/i18n';
 
   let {
     mode,
@@ -36,7 +38,7 @@
   async function save(): Promise<void> {
     const result = formToSnippet(fields);
     if (!result.ok) {
-      error = result.error;
+      error = translateFormError(result.error);
       return;
     }
     error = null;
@@ -50,13 +52,20 @@
     }
   }
 
+  function translateFormError(value: string): string {
+    if (value === 'Name cannot be empty') return get(t)('validation-name-required');
+    if (value === 'Command cannot be empty') return get(t)('validation-command-required');
+    if (value === "Host is required when scope is 'host'") return get(t)('validation-scope-host-required');
+    return value;
+  }
+
   const label = 'block space-y-1 text-xs font-medium text-muted';
   const field =
     'w-full rounded-lg bg-surface-inset px-3 py-2 text-sm text-fg outline-none ' +
     'focus-visible:ring-2 focus-visible:ring-focus placeholder:text-faint';
 </script>
 
-<Modal label={mode === 'add' ? 'New snippet' : 'Edit snippet'} onClose={onCancel}>
+<Modal label={mode === 'add' ? $t('snippets-new') : $t('snippets-edit')} onClose={onCancel}>
   <form
     onsubmit={(e) => {
       e.preventDefault();
@@ -65,17 +74,17 @@
     class="flex min-h-0 flex-col"
   >
     <header class="border-b border-default px-5 py-3.5">
-      <h2 class="text-sm font-semibold">{mode === 'add' ? 'New snippet' : 'Edit snippet'}</h2>
+      <h2 class="text-sm font-semibold">{mode === 'add' ? $t('snippets-new') : $t('snippets-edit')}</h2>
     </header>
 
     <div class="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
       <label class={label}>
-        <span>Name</span>
+        <span>{$t('snippets-name')}</span>
         <input bind:this={nameEl} bind:value={fields.name} class={field} placeholder="restart-service" />
       </label>
 
       <label class={label}>
-        <span>Command</span>
+        <span>{$t('snippets-command')}</span>
         <textarea
           bind:value={fields.command}
           rows="3"
@@ -86,30 +95,30 @@
 
       <div class="grid grid-cols-2 gap-3">
         <label class={label}>
-          <span>Scope</span>
+          <span>{$t('snippets-scope')}</span>
           <Select bind:value={fields.scope} class={field}>
-            <option value="global">global</option>
-            <option value="host">host</option>
+            <option value="global">{$t('snippets-scope-global')}</option>
+            <option value="host">{$t('snippets-scope-host')}</option>
           </Select>
         </label>
         <label class={label}>
-          <span>Host {fields.scope === 'host' ? '(required)' : '(optional)'}</span>
+          <span>{$t('snippets-host')} {fields.scope === 'host' ? $t('snippets-required') : $t('snippets-optional')}</span>
           <input bind:value={fields.host} class={field} placeholder="web-1" />
         </label>
       </div>
 
       <label class={label}>
-        <span>Tags</span>
+        <span>{$t('snippets-tags')}</span>
         <input bind:value={fields.tags} class={field} placeholder="ops, deploy" />
       </label>
 
       <div class="space-y-1">
         <label class={label}>
-          <span>Params</span>
+          <span>{$t('snippets-parameters')}</span>
           <input bind:value={fields.params} class={field} placeholder="service, timeout" />
         </label>
         <p class="text-[11px] text-faint">
-          Comma-separated names, referenced as {'{{name}}'} in the command.
+          {$t('snippets-params-description')}
         </p>
       </div>
 
@@ -119,9 +128,9 @@
     </div>
 
     <footer class="flex justify-end gap-2 border-t border-default px-5 py-3">
-      <Button variant="ghost" onclick={onCancel}>Cancel</Button>
+      <Button variant="ghost" onclick={onCancel}>{$t('common-cancel')}</Button>
       <Button variant="primary" type="submit" disabled={saving}>
-        {mode === 'add' ? 'Add snippet' : 'Save'}
+        {mode === 'add' ? $t('snippets-add') : $t('common-save')}
       </Button>
     </footer>
   </form>

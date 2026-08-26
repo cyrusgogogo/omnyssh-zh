@@ -32,7 +32,7 @@ use omnyssh_core::config::snippets::SnippetScope;
 pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState) {
     if area.width < 40 || area.height < 6 {
         frame.render_widget(
-            Paragraph::new("Terminal too small for snippets screen.")
+            Paragraph::new(crate::i18n::tr("snippets-too-small"))
                 .style(Style::default().fg(view.theme.text_error)),
             area,
         );
@@ -51,12 +51,18 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
     let sv = &view.snippets_view;
     if let Some(popup_val) = &sv.popup {
         match popup_val {
-            SnippetPopup::Add(form) => {
-                popup::render_snippet_form(frame, form, "Add Snippet", &view.theme)
-            }
-            SnippetPopup::Edit { form, .. } => {
-                popup::render_snippet_form(frame, form, "Edit Snippet", &view.theme)
-            }
+            SnippetPopup::Add(form) => popup::render_snippet_form(
+                frame,
+                form,
+                &crate::i18n::tr("snippets-add"),
+                &view.theme,
+            ),
+            SnippetPopup::Edit { form, .. } => popup::render_snippet_form(
+                frame,
+                form,
+                &crate::i18n::tr("snippets-edit"),
+                &view.theme,
+            ),
             SnippetPopup::DeleteConfirm(idx) => {
                 let name = state
                     .snippets
@@ -110,7 +116,7 @@ fn render_header(frame: &mut Frame, area: Rect, view: &ViewState) {
     let count = sv.filtered_indices.len();
 
     let mut spans: Vec<Span> = vec![Span::styled(
-        format!(" Snippets ({}) ", count),
+        format!(" {} ({}) ", crate::i18n::tr("screen-snippets"), count),
         Style::default()
             .fg(Color::White)
             .add_modifier(Modifier::BOLD),
@@ -129,7 +135,7 @@ fn render_header(frame: &mut Frame, area: Rect, view: &ViewState) {
     }
 
     spans.push(Span::styled(
-        "  n:new  e:edit  d:del  Enter:run  b:broadcast  /:search",
+        crate::i18n::tr("snippets-hints"),
         Style::default().fg(view.theme.text_muted),
     ));
 
@@ -149,9 +155,9 @@ fn render_list(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState
 
     if sv.filtered_indices.is_empty() {
         let msg = if !sv.search_query.is_empty() {
-            "  No snippets match."
+            crate::i18n::tr("snippets-no-match")
         } else {
-            "  No snippets. Press  n  to create your first snippet."
+            crate::i18n::tr("snippets-empty")
         };
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
@@ -187,8 +193,8 @@ fn render_list(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState
 
             // Scope badge.
             let (badge_text, badge_color) = match s.scope {
-                SnippetScope::Global => ("global", Color::Cyan),
-                SnippetScope::Host => ("host", Color::Yellow),
+                SnippetScope::Global => (crate::i18n::tr("snippets-global"), Color::Cyan),
+                SnippetScope::Host => (crate::i18n::tr("snippets-host"), Color::Yellow),
             };
 
             // Command preview — truncated.

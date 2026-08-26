@@ -13,6 +13,7 @@ function host(partial: Partial<HostDto>): HostDto {
     user: 'deploy',
     port: 22,
     tags: [],
+    hiddenFromOverview: false,
     source: 'manual',
     hasKey: false,
     monitoring: 'ssh',
@@ -126,6 +127,7 @@ describe('formFromHost', () => {
       password: undefined,
       tags: ['ops'],
       notes: 'x',
+      hiddenFromOverview: false,
       monitoring: 'ssh',
       monitorPort: undefined
     });

@@ -7,6 +7,7 @@
 
 pub mod config;
 pub mod event;
+pub mod locale;
 pub mod ssh;
 pub mod update;
 pub mod utils;

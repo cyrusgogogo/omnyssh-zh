@@ -244,17 +244,27 @@ pub fn parse_ram_vmstat(vm_stat_output: &str, memsize_output: &str) -> Option<f6
         })
         .unwrap_or(4096.0);
 
-    // Count free + speculative pages
+    // Match Activity Monitor's physical-memory view: file-backed pages are
+    // cached files and can be reclaimed without displacing anonymous app
+    // memory. Counting only free pages makes a cache-warmed Mac look full.
+    // Older vm_stat output did not expose File-backed pages, so retain the
+    // previous free + speculative calculation as a compatibility fallback.
     let mut free_pages: f64 = 0.0;
     let mut speculative_pages: f64 = 0.0;
+    let mut file_backed_pages: Option<f64> = None;
     for line in vm_stat_output.lines() {
         if let Some(val) = parse_vmstat_line(line, "Pages free:") {
             free_pages = val;
         } else if let Some(val) = parse_vmstat_line(line, "Pages speculative:") {
             speculative_pages = val;
+        } else if let Some(val) = parse_vmstat_line(line, "File-backed pages:") {
+            file_backed_pages = Some(val);
         }
     }
-    let available_bytes = (free_pages + speculative_pages) * page_size;
+    let available_pages = file_backed_pages
+        .map(|cached| free_pages + cached)
+        .unwrap_or(free_pages + speculative_pages);
+    let available_bytes = available_pages * page_size;
     Some(((total_bytes - available_bytes) / total_bytes * 100.0).clamp(0.0, 100.0))
 }
 

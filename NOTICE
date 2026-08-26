@@ -1,0 +1,15 @@
+OmnySSH (Chinese-optimized edition)
+
+This distribution is based on OmnySSH by Tim Hartmann and contributors:
+https://github.com/timhartmann7/omnyssh
+
+This distribution contains modifications, including Simplified Chinese
+localization, user OpenSSH configuration and key management, system-terminal
+and system-tray integration, desktop host cards, and related reliability and
+interface improvements.
+
+The upstream work and this modified distribution are licensed under the
+Apache License, Version 2.0. See the LICENSE file included with this source and
+with binary distributions.
+
+The upstream author does not endorse this modified distribution.

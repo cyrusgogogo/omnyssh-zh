@@ -5,6 +5,7 @@
   import { lastError } from '$lib/stores/notifications';
   import { hostSummary } from '$lib/stores/hostSummary';
   import { StatusDot } from '$lib/theme';
+  import { t } from '$lib/i18n';
 </script>
 
 <footer
@@ -13,18 +14,18 @@
   {#if $lastError}
     <span class="min-w-0 truncate text-status-crit">{$lastError}</span>
   {:else}
-    <span class="min-w-0 truncate">Ready</span>
+    <span class="min-w-0 truncate">{$t('status-ready')}</span>
   {/if}
   <div class="flex shrink-0 items-center gap-3">
-    <span>{$hostSummary.total} {$hostSummary.total === 1 ? 'host' : 'hosts'}</span>
+    <span>{$t('status-host-count', { count: $hostSummary.total })}</span>
     <span class="flex items-center gap-1.5">
-      <StatusDot status="ok" label="online" />{$hostSummary.online} online
+      <StatusDot status="ok" label={$t('dashboard-status-online')} />{$t('status-online-count', { count: $hostSummary.online })}
     </span>
     <span class="flex items-center gap-1.5">
-      <StatusDot status="warn" label="alert" />{$hostSummary.alert} alert
+      <StatusDot status="warn" label={$t('status-alert')} />{$t('status-alert-count', { count: $hostSummary.alert })}
     </span>
     <span class="flex items-center gap-1.5">
-      <StatusDot status="off" label="offline" />{$hostSummary.offline} offline
+      <StatusDot status="off" label={$t('dashboard-status-offline')} />{$t('status-offline-count', { count: $hostSummary.offline })}
     </span>
   </div>
 </footer>

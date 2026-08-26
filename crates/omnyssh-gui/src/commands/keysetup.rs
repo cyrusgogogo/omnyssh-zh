@@ -30,12 +30,13 @@ pub fn start_key_setup(
     state: State<'_, GuiState>,
     host_name: String,
 ) -> Result<(), CommandError> {
-    let host = state.host_by_name(&host_name).ok_or_else(|| CommandError {
-        message: format!("unknown host '{host_name}'"),
+    let host = state.host_by_name(&host_name).ok_or_else(|| {
+        CommandError::new("key-setup", format!("unknown host '{host_name}'"))
+            .with_arg("host", host_name.clone())
     })?;
     state
         .try_begin_key_setup(&host_name)
-        .map_err(|message| CommandError { message })?;
+        .map_err(|message| CommandError::new("key-setup", message))?;
     tauri::async_runtime::spawn(run_key_setup(app, host, state.engine_sender()));
     Ok(())
 }

@@ -63,12 +63,19 @@ pub struct Host {
     /// ProxyJump host alias (for bastion / jump-host setups).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub proxy_jump: Option<String>,
+    /// OpenSSH `Ciphers` algorithm-list modifier for this host.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ciphers: Option<String>,
     /// Organisational tags (e.g. `["production", "web"]`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
     /// Free-text notes about this host.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+    /// Hide this connection alias from overview dashboards while keeping it
+    /// available to terminal, SFTP, snippets, and other host pickers.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub hidden_from_overview: bool,
     /// Where this entry came from.
     #[serde(default)]
     pub source: HostSource,
@@ -104,6 +111,10 @@ fn default_port() -> u16 {
     22
 }
 
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 impl Default for Host {
     fn default() -> Self {
         Self {
@@ -114,8 +125,10 @@ impl Default for Host {
             identity_file: None,
             password: None,
             proxy_jump: None,
+            ciphers: None,
             tags: Vec::new(),
             notes: None,
+            hidden_from_overview: false,
             source: HostSource::default(),
             original_ssh_host: None,
             monitoring: MonitorMode::default(),

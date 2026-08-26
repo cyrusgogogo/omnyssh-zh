@@ -131,6 +131,8 @@ pub struct AppState {
 pub struct ViewState {
     /// Whether the help popup is currently shown.
     pub show_help: bool,
+    /// Runtime language selector, when open.
+    pub language_popup: Option<LanguagePopup>,
     /// Scroll offset for help popup (0 = top).
     pub help_scroll: usize,
     /// Transient status message shown in the status bar (overrides hints).
@@ -159,6 +161,7 @@ impl ViewState {
     fn default_inner() -> Self {
         Self {
             show_help: false,
+            language_popup: None,
             help_scroll: 0,
             status_message: None,
             host_list: HostListView::default(),
@@ -170,6 +173,23 @@ impl ViewState {
             tick_count: 0,
             update_popup: None,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct LanguagePopup {
+    pub selected: usize,
+}
+
+impl LanguagePopup {
+    pub const PREFERENCES: [&'static str; 3] = ["system", "en-US", "zh-CN"];
+
+    pub fn from_preference(preference: &str) -> Self {
+        let selected = Self::PREFERENCES
+            .iter()
+            .position(|value| value.eq_ignore_ascii_case(preference))
+            .unwrap_or(1);
+        Self { selected }
     }
 }
 
@@ -224,6 +244,7 @@ impl App {
     /// The config is used to set the active theme and keybindings at startup.
     /// Call [`App::default`] to use a default config without loading a file.
     pub fn new(config: AppConfig) -> Self {
+        crate::i18n::init(&config.ui.language);
         let (tx, rx) = mpsc::channel(256);
         let (core_tx, core_rx) = mpsc::channel(256);
         let theme = Theme::from_name(&config.ui.theme);
@@ -619,10 +640,9 @@ impl App {
                 };
                 state.metrics.insert(host_name, merged);
                 // Clear the "Refreshing metrics…" banner once data arrives.
-                if matches!(
-                    self.view.status_message.as_deref(),
-                    Some("Refreshing metrics…")
-                ) {
+                if self.view.status_message.as_deref()
+                    == Some(crate::i18n::tr("status-refreshing-metrics").as_str())
+                {
                     self.view.status_message = None;
                 }
             }
@@ -639,9 +659,9 @@ impl App {
                 if let ConnectionStatus::Failed(ref error) = status {
                     let short_error = error.split(':').next().unwrap_or(error).trim().to_string();
 
-                    self.view.status_message = Some(format!(
-                        "Connection failed for '{}': {}",
-                        host_name, short_error
+                    self.view.status_message = Some(crate::i18n::tr_args(
+                        "status-connection-failed",
+                        &[("host", host_name.clone()), ("error", short_error)],
                     ));
                 }
 
@@ -671,9 +691,9 @@ impl App {
                 // Discovery errors often contain the full command after a colon, so extract just the first part
                 let short_error = error.split(':').next().unwrap_or(&error).trim().to_string();
 
-                self.view.status_message = Some(format!(
-                    "Discovery failed for '{}': {}",
-                    host_name, short_error
+                self.view.status_message = Some(crate::i18n::tr_args(
+                    "status-discovery-failed",
+                    &[("host", host_name), ("error", short_error)],
                 ));
             }
 
@@ -721,10 +741,12 @@ impl App {
 
                 // Close popup and show success.
                 self.view.host_list.popup = None;
-                self.view.status_message = Some(format!(
-                    "✓ SSH key setup complete for '{}'. Key: {}",
-                    host_name,
-                    key_path.display()
+                self.view.status_message = Some(crate::i18n::tr_args(
+                    "status-key-complete",
+                    &[
+                        ("host", host_name),
+                        ("path", key_path.display().to_string()),
+                    ],
                 ));
             }
 
@@ -732,17 +754,19 @@ impl App {
                 tracing::error!(host = %host_name, error = %error, "key setup failed");
                 // Close popup and show error.
                 self.view.host_list.popup = None;
-                self.view.status_message =
-                    Some(format!("✗ Key setup failed for '{}': {}", host_name, error));
+                self.view.status_message = Some(crate::i18n::tr_args(
+                    "status-key-failed",
+                    &[("host", host_name), ("error", error)],
+                ));
             }
 
             CoreEvent::KeySetupRollback(host_name, result) => {
                 tracing::warn!(host = %host_name, result = %result, "key setup rollback");
                 // Close popup and show rollback result.
                 self.view.host_list.popup = None;
-                self.view.status_message = Some(format!(
-                    "⚠ Key setup rolled back for '{}': {}",
-                    host_name, result
+                self.view.status_message = Some(crate::i18n::tr_args(
+                    "status-key-rolled-back",
+                    &[("host", host_name), ("detail", result)],
                 ));
             }
 
@@ -763,13 +787,11 @@ impl App {
                 if let Some(popup) = &mut self.view.update_popup {
                     popup.phase = match result {
                         Ok(()) => UpdatePopupPhase::Done {
-                            message: "Update installed. Restart omny to use \
-                                      the new version."
-                                .to_string(),
+                            message: crate::i18n::tr("update-installed"),
                             ok: true,
                         },
                         Err(err) => UpdatePopupPhase::Done {
-                            message: format!("Update failed: {}", err),
+                            message: crate::i18n::tr_args("update-failed", &[("error", err)]),
                             ok: false,
                         },
                     };
@@ -811,7 +833,7 @@ impl App {
                     tv.split_focus = SplitFocus::Primary;
                     if tv.tabs.is_empty() {
                         self.state.write().await.screen = Screen::Dashboard;
-                        self.view.status_message = Some("SSH session closed.".to_string());
+                        self.view.status_message = Some(crate::i18n::tr("status-session-closed"));
                     } else {
                         tv.active_tab = tv.active_tab.min(tv.tabs.len().saturating_sub(1));
                     }
@@ -874,7 +896,10 @@ impl App {
                 if let Some(mgr) = &self.sftp_manager {
                     mgr.send(SftpCommand::ListDir("/".to_string()));
                 }
-                self.view.status_message = Some(format!("Connected to '{}'", host_name));
+                self.view.status_message = Some(crate::i18n::tr_args(
+                    "status-connected-host",
+                    &[("host", host_name)],
+                ));
             }
 
             CoreEvent::SftpDisconnected { reason } => {
@@ -883,7 +908,10 @@ impl App {
                 self.view.file_manager.sftp_connecting = false;
                 self.view.file_manager.remote = FilePanelView::default();
                 self.view.file_manager.popup = None;
-                self.view.status_message = Some(format!("SFTP: {reason}"));
+                self.view.status_message = Some(crate::i18n::tr_args(
+                    "status-sftp-disconnected",
+                    &[("reason", reason)],
+                ));
             }
 
             CoreEvent::FileDirListed { path, entries } => {
@@ -919,8 +947,10 @@ impl App {
                             self.view.status_message = None;
                             self.refresh_active_panels().await;
                         } else {
-                            self.view.status_message =
-                                Some(format!("{remaining} file(s) remaining…"));
+                            self.view.status_message = Some(crate::i18n::tr_args(
+                                "status-files-remaining",
+                                &[("count", remaining.to_string())],
+                            ));
                         }
                     }
                     Err(e) => {
@@ -928,7 +958,10 @@ impl App {
                         self.view.file_manager.popup = None;
                         self.view.file_manager.active_transfer = None;
                         self.view.file_manager.pending_ops = 0;
-                        self.view.status_message = Some(format!("Transfer failed: {e}"));
+                        self.view.status_message = Some(crate::i18n::tr_args(
+                            "status-transfer-failed",
+                            &[("error", e)],
+                        ));
                         self.refresh_active_panels().await;
                     }
                 }
@@ -955,9 +988,13 @@ impl App {
                 if let Err(ref error) = output {
                     let short_error = error.split(':').next().unwrap_or(error).trim().to_string();
 
-                    self.view.status_message = Some(format!(
-                        "Snippet '{}' failed on '{}': {}",
-                        snippet_name, host_name, short_error
+                    self.view.status_message = Some(crate::i18n::tr_args(
+                        "status-snippet-failed",
+                        &[
+                            ("snippet", snippet_name.clone()),
+                            ("host", host_name.clone()),
+                            ("error", short_error),
+                        ],
                     ));
                 }
 

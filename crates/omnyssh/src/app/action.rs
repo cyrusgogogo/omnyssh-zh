@@ -13,6 +13,8 @@ use super::*;
 pub enum AppAction {
     /// Application should exit.
     Quit,
+    /// Apply and persist a language selected from the global language popup.
+    ApplyLanguage(String),
     /// Connect to `AppState.hosts[idx]` using the system SSH binary.
     ConnectAt(usize),
     /// Open the edit popup pre-filled with the currently selected host.

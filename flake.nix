@@ -50,6 +50,7 @@
 
             postInstall = ''
               installManPage doc/omny.1
+              install -Dm644 doc/zh_CN/omny.1 "$out/share/man/zh_CN/man1/omny.1"
             '';
 
             meta = with pkgs.lib; {

@@ -26,7 +26,7 @@ pub async fn terminal_open(
     // sync command on the main thread. Mirrors async `sftp_open`/`reload_hosts`.
     state
         .open_terminal(&host_name, cols, rows, on_output)
-        .map_err(|message| CommandError { message })
+        .map_err(|message| CommandError::new("terminal-open", message))
 }
 
 /// Send keystrokes / pasted bytes to a terminal (tech-gui.md §4.2). Input is

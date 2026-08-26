@@ -5,6 +5,7 @@
 
 pub mod app;
 pub mod event;
+pub mod i18n;
 pub mod keybindings;
 pub mod term_input;
 pub mod ui;

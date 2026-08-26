@@ -40,7 +40,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
     // Minimum terminal size guard.
     if area.width < 40 || area.height < 10 {
         frame.render_widget(
-            Paragraph::new("Terminal too small for dashboard.")
+            Paragraph::new(crate::i18n::tr("dashboard-too-small"))
                 .style(Style::default().fg(view.theme.text_error)),
             area,
         );
@@ -65,10 +65,18 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
     if let Some(popup) = &hlv.popup {
         use crate::app::HostPopup;
         match popup {
-            HostPopup::Add(form) => popup::render_host_form(frame, form, "Add Host", &view.theme),
-            HostPopup::Edit { form, .. } => {
-                popup::render_host_form(frame, form, "Edit Host", &view.theme)
-            }
+            HostPopup::Add(form) => popup::render_host_form(
+                frame,
+                form,
+                &crate::i18n::tr("dashboard-add-host"),
+                &view.theme,
+            ),
+            HostPopup::Edit { form, .. } => popup::render_host_form(
+                frame,
+                form,
+                &crate::i18n::tr("dashboard-edit-host"),
+                &view.theme,
+            ),
             HostPopup::DeleteConfirm(idx) => {
                 let name = state
                     .hosts
@@ -117,7 +125,7 @@ fn render_header(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewSta
     let hlv = &view.host_list;
     let mut spans = vec![
         Span::styled(
-            " Dashboard ",
+            format!(" {} ", crate::i18n::tr("screen-dashboard")),
             Style::default()
                 .fg(view.theme.title)
                 .add_modifier(Modifier::BOLD),
@@ -145,14 +153,14 @@ fn render_header(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewSta
     }
 
     // Build key hints.
-    let mut hints = String::from("r:refresh  s:sort  t:tags  /:search  a:add  x:execute");
+    let mut hints = crate::i18n::tr("dashboard-hints");
 
     // Check if selected host needs SSH key setup.
     // Show "Shift+K:ssh-setup" hint if selected host has password but no identity_file.
     if let Some(idx) = hlv.selected_host_idx() {
         if let Some(host) = state.hosts.get(idx) {
             if host.password.is_some() && host.identity_file.is_none() {
-                hints.push_str("  Shift+K:ssh-setup");
+                hints.push_str(&crate::i18n::tr("dashboard-key-setup-hint"));
             }
         }
     }
@@ -177,10 +185,8 @@ fn render_grid(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState
 
     if state.hosts.is_empty() {
         frame.render_widget(
-            Paragraph::new(
-                "\n  No hosts configured.\n\n  Press  a  to add a host, or  r  to reload from ~/.ssh/config.",
-            )
-            .style(Style::default().fg(view.theme.text_muted)),
+            Paragraph::new(crate::i18n::tr("dashboard-empty"))
+                .style(Style::default().fg(view.theme.text_muted)),
             area,
         );
         return;
@@ -188,7 +194,7 @@ fn render_grid(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState
 
     if hlv.filtered_indices.is_empty() {
         frame.render_widget(
-            Paragraph::new("\n  No hosts match the current filter.")
+            Paragraph::new(crate::i18n::tr("dashboard-no-results"))
                 .style(Style::default().fg(view.theme.text_muted)),
             area,
         );
@@ -361,6 +367,10 @@ pub fn handle_input(key: KeyEvent, view: &mut ViewState) -> Option<AppAction> {
         KeyCode::Char('r') => Some(AppAction::RefreshMetrics),
         KeyCode::Char('s') => Some(AppAction::CycleSortOrder),
         KeyCode::Char('t') => Some(AppAction::OpenTagFilter),
+        KeyCode::Char('H') => {
+            hlv.show_hidden = !hlv.show_hidden;
+            Some(AppAction::SearchQueryChanged)
+        }
 
         // Quick-execute snippet on selected host.
         KeyCode::Char('x') => Some(AppAction::OpenQuickExecute),

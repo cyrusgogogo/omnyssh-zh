@@ -14,12 +14,21 @@ pub struct KeyBind {
     pub code: KeyCode,
     /// If true, the `Ctrl` modifier must be pressed for this binding to match.
     pub ctrl: bool,
+    /// If true, the Shift modifier must be pressed for this binding to match.
+    pub shift: bool,
 }
 
 impl KeyBind {
     pub fn matches(&self, key: KeyEvent) -> bool {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        key.code == self.code && ctrl == self.ctrl
+        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+        let same_code = match (key.code, self.code) {
+            (KeyCode::Char(actual), KeyCode::Char(expected)) => {
+                actual.eq_ignore_ascii_case(&expected)
+            }
+            (actual, expected) => actual == expected,
+        };
+        same_code && ctrl == self.ctrl && shift == self.shift
     }
 }
 
@@ -37,6 +46,8 @@ pub struct ParsedKeybindings {
     pub file_manager: KeyCode,
     /// Key that switches to the Snippets screen (default: `F3`).
     pub snippets: KeyCode,
+    /// Key that opens the language selector (default: `Shift+L`).
+    pub language: KeyBind,
     /// Key that cycles to the next screen / switches FM panels (default: `Tab`).
     pub next_screen: KeyBind,
     /// Key that cycles terminal tabs / split panes (default: `Ctrl+N`).
@@ -62,6 +73,8 @@ impl ParsedKeybindings {
             }),
             snippets: parse_keycode(&cfg.snippets)
                 .unwrap_or_else(|| parse_keycode(&defaults.snippets).expect("default snippets")),
+            language: parse_keybind(&cfg.language)
+                .unwrap_or_else(|| parse_keybind(&defaults.language).expect("default language")),
             next_screen: parse_keybind(&cfg.next_screen).unwrap_or_else(|| {
                 parse_keybind(&defaults.next_screen).expect("default next_screen")
             }),
@@ -137,16 +150,43 @@ pub fn parse_keybind(s: &str) -> Option<KeyBind> {
             return rest.chars().next().map(|c| KeyBind {
                 code: KeyCode::Char(c.to_ascii_lowercase()),
                 ctrl: true,
+                shift: false,
             });
         }
         // Named key e.g. "Ctrl+Enter", "Ctrl+Tab".
         if let Some(code) = parse_keycode(rest) {
-            return Some(KeyBind { code, ctrl: true });
+            return Some(KeyBind {
+                code,
+                ctrl: true,
+                shift: false,
+            });
         }
         return None;
     }
     // Plain key name — no modifier required.
-    parse_keycode(s).map(|code| KeyBind { code, ctrl: false })
+    if let Some(rest) = s
+        .strip_prefix("Shift+")
+        .or_else(|| s.strip_prefix("shift+"))
+        .or_else(|| s.strip_prefix("SHIFT+"))
+    {
+        let code = if rest.chars().count() == 1 {
+            rest.chars()
+                .next()
+                .map(|c| KeyCode::Char(c.to_ascii_lowercase()))
+        } else {
+            parse_keycode(rest)
+        }?;
+        return Some(KeyBind {
+            code,
+            ctrl: false,
+            shift: true,
+        });
+    }
+    parse_keycode(s).map(|code| KeyBind {
+        code,
+        ctrl: false,
+        shift: false,
+    })
 }
 
 #[cfg(test)]

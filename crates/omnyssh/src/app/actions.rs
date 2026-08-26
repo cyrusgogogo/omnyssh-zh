@@ -15,6 +15,27 @@ impl App {
             // Quit is intercepted in main_loop before process_action is called.
             AppAction::Quit => {}
 
+            AppAction::ApplyLanguage(preference) => {
+                crate::i18n::set_preference(&preference);
+                self.config.ui.language = preference.clone();
+                let label = match preference.as_str() {
+                    "system" => crate::i18n::tr("language-system"),
+                    "zh-CN" => crate::i18n::tr("language-chinese"),
+                    _ => crate::i18n::tr("language-english"),
+                };
+                self.view.status_message =
+                    match config::app_config::save_language_to_config(&preference) {
+                        Ok(()) => Some(crate::i18n::tr_args(
+                            "language-saved",
+                            &[("language", label)],
+                        )),
+                        Err(error) => Some(crate::i18n::tr_args(
+                            "language-save-failed",
+                            &[("error", error.to_string())],
+                        )),
+                    };
+            }
+
             AppAction::ConnectAt(idx) => {
                 // Open a PTY tab in the Terminal screen instead of
                 // the old system-SSH hand-off.
@@ -55,7 +76,7 @@ impl App {
                         Err(e) => tracing::warn!("Reload failed: {}", e),
                     }
                 });
-                self.view.status_message = Some("Reloading hosts…".to_string());
+                self.view.status_message = Some(crate::i18n::tr("status-reloading-hosts"));
             }
 
             AppAction::SearchQueryChanged => {
@@ -71,7 +92,7 @@ impl App {
                 if let Some(mgr) = &self.poll_manager {
                     mgr.refresh_all();
                 }
-                self.view.status_message = Some("Refreshing metrics…".to_string());
+                self.view.status_message = Some(crate::i18n::tr("status-refreshing-metrics"));
             }
 
             AppAction::CycleSortOrder => {
@@ -136,13 +157,13 @@ impl App {
                         if host.password.is_some() && host.identity_file.is_none() {
                             self.view.host_list.popup = Some(HostPopup::KeySetupConfirm(idx));
                         } else if host.identity_file.is_some() {
-                            self.view.status_message =
-                                Some(format!("'{}' already uses key authentication.", host.name));
+                            self.view.status_message = Some(crate::i18n::tr_args(
+                                "status-key-already-used",
+                                &[("host", &host.name)],
+                            ));
                         } else {
-                            self.view.status_message = Some(
-                                "No password set for this host. Add a password first to enable key setup."
-                                    .to_string(),
-                            );
+                            self.view.status_message =
+                                Some(crate::i18n::tr("status-key-needs-password"));
                         }
                     }
                 }
@@ -409,7 +430,7 @@ impl App {
                         command_field: FormField::default(),
                     });
                 } else {
-                    self.view.status_message = Some("No host selected.".to_string());
+                    self.view.status_message = Some(crate::i18n::tr("status-no-host-selected"));
                 }
             }
 
@@ -485,14 +506,13 @@ impl App {
                     )
                 };
                 if paths.is_empty() {
-                    self.view.status_message = Some("Nothing to copy.".to_string());
+                    self.view.status_message = Some(crate::i18n::tr("status-nothing-copy"));
                 } else {
                     self.view.file_manager.clipboard = Some(FmClipboard {
                         paths,
                         source_panel: source,
                     });
-                    self.view.status_message =
-                        Some("Copied to clipboard. Switch panel and press p to paste.".to_string());
+                    self.view.status_message = Some(crate::i18n::tr("status-copied"));
                 }
             }
 
@@ -503,7 +523,7 @@ impl App {
             AppAction::FmOpenDeleteConfirm => {
                 let paths = self.active_fm_panel_ref().marked_or_cursor_paths();
                 if paths.is_empty() {
-                    self.view.status_message = Some("Nothing to delete.".to_string());
+                    self.view.status_message = Some(crate::i18n::tr("status-nothing-delete"));
                 } else {
                     self.view.file_manager.popup = Some(FileManagerPopup::DeleteConfirm { paths });
                 }
@@ -633,9 +653,7 @@ impl App {
                     });
                     tv.split_focus = SplitFocus::Primary;
                 } else {
-                    self.view.status_message = Some(
-                        "Need at least 2 tabs to split. Open another tab with Ctrl+T.".to_string(),
-                    );
+                    self.view.status_message = Some(crate::i18n::tr("status-split-needs-tabs"));
                 }
             }
 
@@ -658,9 +676,7 @@ impl App {
                     });
                     tv.split_focus = SplitFocus::Primary;
                 } else {
-                    self.view.status_message = Some(
-                        "Need at least 2 tabs to split. Open another tab with Ctrl+T.".to_string(),
-                    );
+                    self.view.status_message = Some(crate::i18n::tr("status-split-needs-tabs"));
                 }
             }
 

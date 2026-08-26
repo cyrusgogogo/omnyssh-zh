@@ -42,6 +42,7 @@ describe('ipc event router', () => {
         user: 'root',
         port: 22,
         tags: [],
+        hiddenFromOverview: false,
         source: 'manual',
         hasKey: false,
         monitoring: 'ssh'
@@ -111,7 +112,7 @@ describe('ipc event router', () => {
     applyServicesDetected({ hostName: 'web-2', services: [{ kind: 'docker', metrics: [] }] });
 
     applyHostsLoaded([
-      { name: 'web-1', hostname: '10.0.0.1', user: 'root', port: 22, tags: [], source: 'manual', hasKey: false, monitoring: 'ssh' }
+      { name: 'web-1', hostname: '10.0.0.1', user: 'root', port: 22, tags: [], hiddenFromOverview: false, source: 'manual', hasKey: false, monitoring: 'ssh' }
     ]);
 
     expect(get(statuses).has('web-2')).toBe(false);

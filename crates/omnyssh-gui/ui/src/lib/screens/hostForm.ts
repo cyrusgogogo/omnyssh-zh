@@ -15,6 +15,7 @@ export interface HostFormFields {
   password: string;
   tags: string;
   notes: string;
+  hiddenFromOverview: boolean;
   monitoring: MonitorModeDto;
   /** Probe port; blank means "the host's SSH port". Only read for `tcpPort`. */
   monitorPort: string;
@@ -32,6 +33,7 @@ export function emptyForm(): HostFormFields {
     password: '',
     tags: '',
     notes: '',
+    hiddenFromOverview: false,
     monitoring: 'ssh',
     monitorPort: ''
   };
@@ -50,6 +52,7 @@ export function formFromHost(h: HostDto): HostFormFields {
     password: '',
     tags: h.tags.join(', '),
     notes: h.notes ?? '',
+    hiddenFromOverview: h.hiddenFromOverview,
     monitoring: h.monitoring,
     monitorPort: h.monitorPort == null ? '' : String(h.monitorPort)
   };
@@ -116,6 +119,7 @@ export function formToInput(f: HostFormFields): HostFormResult {
       password: password || undefined,
       tags,
       notes: notes || undefined,
+      hiddenFromOverview: f.hiddenFromOverview,
       monitoring: f.monitoring,
       monitorPort
     }

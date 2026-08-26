@@ -24,6 +24,9 @@ export type IconName =
   | 'refresh'
   | 'key'
   | 'shield'
+  | 'ssh-config'
   | 'settings'
   | 'telegram'
-  | 'star';
+  | 'star'
+  | 'pin'
+  | 'desktop-card';

@@ -49,7 +49,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
     // Minimum terminal size guard
     if area.width < 60 || area.height < 20 {
         frame.render_widget(
-            Paragraph::new("Terminal too small for detail view. (min 60x20)")
+            Paragraph::new(crate::i18n::tr("detail-too-small"))
                 .style(Style::default().fg(view.theme.text_error)),
             area,
         );
@@ -61,7 +61,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
         Some(idx) => idx,
         None => {
             frame.render_widget(
-                Paragraph::new("No host selected.")
+                Paragraph::new(crate::i18n::tr("detail-no-host"))
                     .style(Style::default().fg(view.theme.text_error)),
                 area,
             );
@@ -134,8 +134,12 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
         render_services(frame, sections[7], svcs, &view.theme);
     } else {
         frame.render_widget(
-            Paragraph::new("  SERVICES\n\n  No discovery data available. Press 'r' to refresh.")
-                .style(Style::default().fg(view.theme.text_muted)),
+            Paragraph::new(format!(
+                "{}\n\n{}",
+                crate::i18n::tr("detail-services-title"),
+                crate::i18n::tr("detail-no-discovery")
+            ))
+            .style(Style::default().fg(view.theme.text_muted)),
             sections[7],
         );
     }
@@ -154,47 +158,67 @@ fn render_header(
     theme: &Theme,
 ) {
     let status_text = match status {
-        Some(ConnectionStatus::Connected) => ("Connected", Color::Green),
-        Some(ConnectionStatus::Connecting) => ("Connecting", Color::Yellow),
-        Some(ConnectionStatus::Failed(e)) => {
-            let msg = format!("Failed: {}", e);
-            (msg.leak() as &str, Color::Red)
+        Some(ConnectionStatus::Connected) => {
+            (crate::i18n::tr("dashboard-status-online"), Color::Green)
         }
-        _ => ("Unknown", Color::DarkGray),
+        Some(ConnectionStatus::Connecting) => (
+            crate::i18n::tr("dashboard-status-connecting"),
+            Color::Yellow,
+        ),
+        Some(ConnectionStatus::Failed(e)) => {
+            let msg = crate::i18n::tr_args("detail-failed", &[("error", e.clone())]);
+            (msg, Color::Red)
+        }
+        _ => (crate::i18n::tr("common-unknown"), Color::DarkGray),
     };
 
     let uptime = metrics
         .and_then(|m| m.uptime.as_deref())
-        .unwrap_or("unknown");
+        .map(str::to_string)
+        .unwrap_or_else(|| crate::i18n::tr("common-unknown"));
 
     // Line 1: Host info
     let line1 = Line::from(vec![
-        Span::styled(" Host: ", Style::default().fg(theme.text_secondary)),
+        Span::styled(
+            format!(" {}: ", crate::i18n::tr("snippets-host")),
+            Style::default().fg(theme.text_secondary),
+        ),
         Span::styled(
             format!("{}:{}", host.hostname, host.port),
             Style::default().fg(theme.accent),
         ),
         Span::raw("   "),
-        Span::styled("User: ", Style::default().fg(theme.text_secondary)),
+        Span::styled(
+            format!("{}: ", crate::i18n::tr("host-user")),
+            Style::default().fg(theme.text_secondary),
+        ),
         Span::styled(&host.user, Style::default().fg(theme.text_warning)),
         Span::raw("   "),
-        Span::styled("Up: ", Style::default().fg(theme.text_secondary)),
+        Span::styled(
+            format!("{}: ", crate::i18n::tr("dashboard-uptime")),
+            Style::default().fg(theme.text_secondary),
+        ),
         Span::styled(uptime, Style::default().fg(theme.text_success)),
         Span::raw("   "),
-        Span::styled("Status: ", Style::default().fg(theme.text_secondary)),
+        Span::styled(
+            format!("{}: ", crate::i18n::tr("detail-status")),
+            Style::default().fg(theme.text_secondary),
+        ),
         Span::styled(status_text.0, Style::default().fg(status_text.1)),
     ]);
 
     // Line 2: OS info from discovery
     let os_display = metrics
         .and_then(|m| m.os_info.as_deref())
-        .unwrap_or("(discovery pending)");
+        .map(str::to_string)
+        .unwrap_or_else(|| crate::i18n::tr("detail-discovery-pending"));
+    let discovery_pending = metrics.and_then(|m| m.os_info.as_deref()).is_none();
 
     let line2 = Line::from(vec![
         Span::styled(" OS: ", Style::default().fg(theme.text_secondary)),
         Span::styled(
             os_display,
-            if os_display == "(discovery pending)" {
+            if discovery_pending {
                 Style::default().fg(theme.text_muted)
             } else {
                 Style::default().fg(theme.accent)
@@ -216,7 +240,7 @@ fn render_metrics_alerts(frame: &mut Frame, area: Rect, metrics: Option<&Metrics
 
 fn render_metrics_column(frame: &mut Frame, area: Rect, metrics: Option<&Metrics>, theme: &Theme) {
     let mut lines = vec![Line::from(Span::styled(
-        " METRICS",
+        format!(" {}", crate::i18n::tr("detail-metrics")),
         Style::default()
             .fg(theme.title)
             .add_modifier(Modifier::BOLD),
@@ -224,7 +248,7 @@ fn render_metrics_column(frame: &mut Frame, area: Rect, metrics: Option<&Metrics
 
     if metrics.is_none() {
         lines.push(Line::from(Span::styled(
-            " unavailable",
+            format!(" {}", crate::i18n::tr("detail-unavailable")),
             Style::default().fg(theme.text_secondary),
         )));
     }
@@ -267,7 +291,10 @@ fn render_metrics_column(frame: &mut Frame, area: Rect, metrics: Option<&Metrics
             }
             let color = threshold_color(ram);
             lines.push(Line::from(vec![
-                Span::styled(" RAM: ", Style::default().fg(theme.text_secondary)),
+                Span::styled(
+                    format!(" {}: ", crate::i18n::tr("dashboard-memory")),
+                    Style::default().fg(theme.text_secondary),
+                ),
                 Span::styled(bar, Style::default().fg(color)),
                 Span::styled(
                     format!(" {:>5.1}%", ram),
@@ -290,7 +317,10 @@ fn render_metrics_column(frame: &mut Frame, area: Rect, metrics: Option<&Metrics
             }
             let color = threshold_color(disk);
             lines.push(Line::from(vec![
-                Span::styled(" DSK: ", Style::default().fg(theme.text_secondary)),
+                Span::styled(
+                    format!(" {}: ", crate::i18n::tr("dashboard-disk")),
+                    Style::default().fg(theme.text_secondary),
+                ),
                 Span::styled(bar, Style::default().fg(color)),
                 Span::styled(
                     format!(" {:>5.1}%", disk),
@@ -302,13 +332,16 @@ fn render_metrics_column(frame: &mut Frame, area: Rect, metrics: Option<&Metrics
         // Load average
         if let Some(load) = &m.load_avg {
             lines.push(Line::from(vec![
-                Span::styled(" Load: ", Style::default().fg(theme.text_secondary)),
+                Span::styled(
+                    format!(" {}: ", crate::i18n::tr("detail-load")),
+                    Style::default().fg(theme.text_secondary),
+                ),
                 Span::styled(load.as_str(), Style::default().fg(theme.accent)),
             ]));
         }
     } else {
         lines.push(Line::from(Span::styled(
-            " (no metrics available)",
+            format!(" {}", crate::i18n::tr("detail-no-metrics")),
             Style::default().fg(theme.text_muted),
         )));
     }
@@ -327,7 +360,7 @@ fn render_metrics_column(frame: &mut Frame, area: Rect, metrics: Option<&Metrics
 /// Renders the "TOP PROCESSES" panel — up to 3 processes by CPU usage.
 fn render_top_processes(frame: &mut Frame, area: Rect, metrics: Option<&Metrics>, theme: &Theme) {
     let mut lines = vec![Line::from(Span::styled(
-        " TOP PROCESSES",
+        format!(" {}", crate::i18n::tr("detail-top-processes")),
         Style::default()
             .fg(theme.title)
             .add_modifier(Modifier::BOLD),
@@ -361,7 +394,7 @@ fn render_top_processes(frame: &mut Frame, area: Rect, metrics: Option<&Metrics>
         }
         _ => {
             lines.push(Line::from(Span::styled(
-                " (process data unavailable)",
+                format!(" {}", crate::i18n::tr("detail-process-unavailable")),
                 Style::default().fg(theme.text_muted),
             )));
         }
@@ -372,7 +405,7 @@ fn render_top_processes(frame: &mut Frame, area: Rect, metrics: Option<&Metrics>
 
 fn render_services(frame: &mut Frame, area: Rect, services: &[DetectedService], theme: &Theme) {
     let mut lines = vec![Line::from(Span::styled(
-        " SERVICES",
+        format!(" {}", crate::i18n::tr("dashboard-services")),
         Style::default()
             .fg(theme.title)
             .add_modifier(Modifier::BOLD),
@@ -380,7 +413,7 @@ fn render_services(frame: &mut Frame, area: Rect, services: &[DetectedService], 
 
     if services.is_empty() {
         lines.push(Line::from(Span::styled(
-            " No services detected",
+            format!(" {}", crate::i18n::tr("detail-no-services")),
             Style::default().fg(theme.text_muted),
         )));
     } else {
@@ -553,7 +586,10 @@ fn render_hints(frame: &mut Frame, area: Rect, theme: &Theme) {
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Connect", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("common-connect")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             "r",
@@ -561,7 +597,10 @@ fn render_hints(frame: &mut Frame, area: Rect, theme: &Theme) {
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Refresh", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("common-refresh")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             "Esc",
@@ -569,7 +608,10 @@ fn render_hints(frame: &mut Frame, area: Rect, theme: &Theme) {
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":← Dashboard", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":← {}", crate::i18n::tr("screen-dashboard")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             "4-9",
@@ -577,7 +619,10 @@ fn render_hints(frame: &mut Frame, area: Rect, theme: &Theme) {
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Quick view", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("detail-quick-view")),
+            Style::default().fg(theme.text_muted),
+        ),
     ]);
 
     frame.render_widget(Paragraph::new(hints), area);

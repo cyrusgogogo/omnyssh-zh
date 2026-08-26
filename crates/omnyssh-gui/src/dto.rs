@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize};
 
 use omnyssh_core::config::app_config::UpdateConfig;
 use omnyssh_core::config::snippets::{Snippet, SnippetScope};
+use omnyssh_core::config::ssh_config_manager::{
+    ApplyReport, BackupEntry, Diagnostic, DiagnosticSeverity, ManagedHost, ManagerSnapshot,
+    Preview, SourceFile,
+};
 use omnyssh_core::event::{
     DetectedService, MetricValue, Metrics, ProcessInfo, ServiceKind, ServiceMetric,
 };
@@ -62,6 +66,7 @@ pub struct HostDto {
     pub tags: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+    pub hidden_from_overview: bool,
     pub source: HostSourceDto,
     pub has_key: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -96,9 +101,125 @@ pub struct HostInputDto {
     #[serde(default)]
     pub notes: Option<String>,
     #[serde(default)]
+    pub hidden_from_overview: bool,
+    #[serde(default)]
     pub monitoring: Option<MonitorModeDto>,
     #[serde(default)]
     pub monitor_port: Option<u16>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ManagedSshHostDto {
+    pub alias: String,
+    pub hostname: String,
+    pub user: String,
+    pub port: u16,
+    pub identity_file: Option<String>,
+    pub proxy_jump: Option<String>,
+    pub ciphers: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SshSourceFileDto {
+    pub path: String,
+    pub content: Option<String>,
+    pub read_only: bool,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum SshDiagnosticSeverityDto {
+    Info,
+    Warning,
+    Blocking,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SshDiagnosticDto {
+    pub severity: SshDiagnosticSeverityDto,
+    pub code: String,
+    pub message: String,
+    pub path: Option<String>,
+    pub line: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SshBackupDto {
+    pub id: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SshConfigSnapshotDto {
+    pub main_path: String,
+    pub managed_path: String,
+    pub installed: bool,
+    pub writable: bool,
+    pub main_hash: String,
+    pub managed_hash: String,
+    pub hosts: Vec<ManagedSshHostDto>,
+    pub sources: Vec<SshSourceFileDto>,
+    pub diagnostics: Vec<SshDiagnosticDto>,
+    pub backups: Vec<SshBackupDto>,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SshKeyRecordDto {
+    pub id: String,
+    pub name: String,
+    pub private_path: String,
+    pub public_path: String,
+    pub key_type: String,
+    pub available: bool,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveredSshKeyDto {
+    pub private_path: String,
+    pub public_path: String,
+    pub suggested_name: String,
+    pub key_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SshKeyBackupDto {
+    pub id: String,
+    pub key_id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SshKeySnapshotDto {
+    pub records: Vec<SshKeyRecordDto>,
+    pub discovered: Vec<DiscoveredSshKeyDto>,
+    pub backups: Vec<SshKeyBackupDto>,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SshConfigPreviewDto {
+    pub main_hash: String,
+    pub managed_hash: String,
+    pub main_diff: String,
+    pub managed_diff: String,
+    pub warnings: Vec<SshDiagnosticDto>,
+    pub can_apply: bool,
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SshApplyReportDto {
+    pub backup_id: String,
+    pub ssh_validation: String,
 }
 
 /// Live connection state for a host (tech-gui.md §4.1). Internally tagged so the
@@ -290,6 +411,7 @@ impl From<&Host> for HostDto {
             port: host.port,
             tags: host.tags.clone(),
             notes: host.notes.clone(),
+            hidden_from_overview: host.hidden_from_overview,
             source: (&host.source).into(),
             has_key: host.identity_file.is_some(),
             password_auth_disabled: host.password_auth_disabled,
@@ -319,8 +441,10 @@ impl From<HostInputDto> for Host {
             identity_file: non_empty(dto.identity_file),
             password: non_empty(dto.password),
             proxy_jump: non_empty(dto.proxy_jump),
+            ciphers: None,
             tags: dto.tags,
             notes: non_empty(dto.notes),
+            hidden_from_overview: dto.hidden_from_overview,
             source: HostSource::Manual,
             original_ssh_host: None,
             monitoring,
@@ -331,6 +455,158 @@ impl From<HostInputDto> for Host {
                 .filter(|&p| p != 0 && monitoring == MonitorMode::TcpPort),
             key_setup_date: None,
             password_auth_disabled: None,
+        }
+    }
+}
+
+impl From<ManagedHost> for ManagedSshHostDto {
+    fn from(value: ManagedHost) -> Self {
+        Self {
+            alias: value.alias,
+            hostname: value.hostname,
+            user: value.user,
+            port: value.port,
+            identity_file: value.identity_file,
+            proxy_jump: value.proxy_jump,
+            ciphers: value.ciphers,
+        }
+    }
+}
+
+impl From<ManagedSshHostDto> for ManagedHost {
+    fn from(value: ManagedSshHostDto) -> Self {
+        Self {
+            alias: value.alias,
+            hostname: value.hostname,
+            user: value.user,
+            port: value.port,
+            identity_file: value.identity_file,
+            proxy_jump: value.proxy_jump,
+            ciphers: value.ciphers,
+        }
+    }
+}
+
+impl From<SourceFile> for SshSourceFileDto {
+    fn from(value: SourceFile) -> Self {
+        Self {
+            path: value.path,
+            content: value.content,
+            read_only: value.read_only,
+        }
+    }
+}
+
+impl From<DiagnosticSeverity> for SshDiagnosticSeverityDto {
+    fn from(value: DiagnosticSeverity) -> Self {
+        match value {
+            DiagnosticSeverity::Info => Self::Info,
+            DiagnosticSeverity::Warning => Self::Warning,
+            DiagnosticSeverity::Blocking => Self::Blocking,
+        }
+    }
+}
+
+impl From<Diagnostic> for SshDiagnosticDto {
+    fn from(value: Diagnostic) -> Self {
+        Self {
+            severity: value.severity.into(),
+            code: value.code,
+            message: value.message,
+            path: value.path,
+            line: value.line,
+        }
+    }
+}
+
+impl From<BackupEntry> for SshBackupDto {
+    fn from(value: BackupEntry) -> Self {
+        Self {
+            id: value.id,
+            path: value.path,
+        }
+    }
+}
+
+impl From<Preview> for SshConfigPreviewDto {
+    fn from(value: Preview) -> Self {
+        Self {
+            main_hash: value.main_hash,
+            managed_hash: value.managed_hash,
+            main_diff: value.main_diff,
+            managed_diff: value.managed_diff,
+            warnings: value.warnings.into_iter().map(Into::into).collect(),
+            can_apply: value.can_apply,
+        }
+    }
+}
+
+impl From<ApplyReport> for SshApplyReportDto {
+    fn from(value: ApplyReport) -> Self {
+        Self {
+            backup_id: value.backup_id,
+            ssh_validation: value.ssh_validation,
+        }
+    }
+}
+
+impl SshConfigSnapshotDto {
+    pub fn from_core(value: ManagerSnapshot) -> Self {
+        Self {
+            main_path: value.main_path,
+            managed_path: value.managed_path,
+            installed: value.installed,
+            writable: value.writable,
+            main_hash: value.main_hash,
+            managed_hash: value.managed_hash,
+            hosts: value.hosts.into_iter().map(Into::into).collect(),
+            sources: value.sources.into_iter().map(Into::into).collect(),
+            diagnostics: value.diagnostics.into_iter().map(Into::into).collect(),
+            backups: value.backups.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<omnyssh_core::config::ssh_key_manager::SshKeyRecord> for SshKeyRecordDto {
+    fn from(value: omnyssh_core::config::ssh_key_manager::SshKeyRecord) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            private_path: value.private_path,
+            public_path: value.public_path,
+            key_type: value.key_type,
+            available: value.available,
+        }
+    }
+}
+
+impl From<omnyssh_core::config::ssh_key_manager::DiscoveredKeyPair> for DiscoveredSshKeyDto {
+    fn from(value: omnyssh_core::config::ssh_key_manager::DiscoveredKeyPair) -> Self {
+        Self {
+            private_path: value.private_path,
+            public_path: value.public_path,
+            suggested_name: value.suggested_name,
+            key_type: value.key_type,
+        }
+    }
+}
+
+impl From<omnyssh_core::config::ssh_key_manager::SshKeyBackup> for SshKeyBackupDto {
+    fn from(value: omnyssh_core::config::ssh_key_manager::SshKeyBackup) -> Self {
+        Self {
+            id: value.id,
+            key_id: value.key_id,
+            name: value.name,
+        }
+    }
+}
+
+impl From<omnyssh_core::config::ssh_key_manager::KeyManagerSnapshot> for SshKeySnapshotDto {
+    fn from(value: omnyssh_core::config::ssh_key_manager::KeyManagerSnapshot) -> Self {
+        Self {
+            records: value.records.into_iter().map(Into::into).collect(),
+            discovered: value.discovered.into_iter().map(Into::into).collect(),
+            backups: value.backups.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -576,6 +852,7 @@ mod tests {
             proxy_jump: Some("bastion".to_string()),
             tags: vec!["prod".to_string()],
             notes: Some("primary".to_string()),
+            hidden_from_overview: false,
             monitoring: None,
             monitor_port: None,
         }
@@ -629,6 +906,7 @@ mod tests {
             proxy_jump: Some(String::new()),
             tags: vec![],
             notes: Some(String::new()),
+            hidden_from_overview: false,
             monitoring: None,
             monitor_port: None,
         });

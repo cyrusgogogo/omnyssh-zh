@@ -16,27 +16,28 @@
     type SessionKind
   } from '$lib/stores/sessions';
   import { sidebarCollapsed } from '$lib/stores/ui';
-  import { spawnSession, closeSession } from '$lib/stores/navigation';
+  import { openHostSession, closeSession } from '$lib/stores/navigation';
   import { palette } from '$lib/stores/palette';
-  import { support } from '$lib/stores/support';
+  import { t } from '$lib/i18n';
 
   // Action-first spawn (tech-gui.md §2): a spawner opens the host-picker, then creates
   // a session of its kind for the chosen host. A dismissed picker spawns nothing.
   async function pickAndSpawn(kind: SessionKind): Promise<void> {
     const host = await palette.pickHost();
-    if (host) spawnSession(kind, host.name);
+    if (host) openHostSession(kind, host.name);
   }
 
-  type Selector = { kind: 'dashboard' | 'snippets'; label: string; icon: IconName };
-  type Spawner = { kind: SessionKind; label: string; icon: IconName };
+  type Selector = { kind: 'dashboard' | 'snippets' | 'sshConfig'; labelKey: string; icon: IconName };
+  type Spawner = { kind: SessionKind; labelKey: string; icon: IconName };
 
   const selectors: Selector[] = [
-    { kind: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { kind: 'snippets', label: 'Snippets', icon: 'snippets' }
+    { kind: 'dashboard', labelKey: 'nav-dashboard', icon: 'dashboard' },
+    { kind: 'snippets', labelKey: 'nav-snippets', icon: 'snippets' },
+    { kind: 'sshConfig', labelKey: 'nav-ssh-config', icon: 'ssh-config' }
   ];
   const spawners: Spawner[] = [
-    { kind: 'sftp', label: 'SFTP', icon: 'sftp' },
-    { kind: 'terminal', label: 'Terminal', icon: 'terminal' }
+    { kind: 'sftp', labelKey: 'nav-sftp', icon: 'sftp' },
+    { kind: 'terminal', labelKey: 'nav-terminal', icon: 'terminal' }
   ];
 
   const rowBase = 'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition';
@@ -59,7 +60,7 @@
     {/if}
     <Button
       variant="icon"
-      title={$sidebarCollapsed ? 'Expand sidebar (⌘B)' : 'Collapse sidebar (⌘B)'}
+      title={$sidebarCollapsed ? $t('nav-expand-shortcut') : $t('nav-collapse-shortcut')}
       onclick={() => sidebarCollapsed.toggle()}
     >
       <Icon name={$sidebarCollapsed ? 'expand' : 'collapse'} />
@@ -76,13 +77,16 @@
             class="{rowBase} {focusRing} {rowState($activeEntity.kind === sel.kind)} {$sidebarCollapsed
               ? 'justify-center'
               : ''}"
-            title={sel.label}
+            title={$t(sel.labelKey)}
             aria-current={$activeEntity.kind === sel.kind ? 'page' : undefined}
-            onclick={() =>
-              sel.kind === 'dashboard' ? activeEntity.selectDashboard() : activeEntity.selectSnippets()}
+            onclick={() => {
+              if (sel.kind === 'dashboard') activeEntity.selectDashboard();
+              else if (sel.kind === 'snippets') activeEntity.selectSnippets();
+              else activeEntity.selectSshConfig();
+            }}
           >
             <Icon name={sel.icon} />
-            {#if !$sidebarCollapsed}<span class="truncate">{sel.label}</span>{/if}
+            {#if !$sidebarCollapsed}<span class="truncate">{$t(sel.labelKey)}</span>{/if}
           </button>
         </li>
       {/each}
@@ -91,11 +95,11 @@
           <button
             type="button"
             class="{rowBase} {focusRing} {rowState(false)} {$sidebarCollapsed ? 'justify-center' : ''}"
-            title={sp.label}
+            title={$t(sp.labelKey)}
             onclick={() => pickAndSpawn(sp.kind)}
           >
             <Icon name={sp.icon} />
-            {#if !$sidebarCollapsed}<span class="truncate">{sp.label}</span>{/if}
+            {#if !$sidebarCollapsed}<span class="truncate">{$t(sp.labelKey)}</span>{/if}
           </button>
         </li>
       {/each}
@@ -136,8 +140,8 @@
                 <button
                   type="button"
                   class="shrink-0 rounded p-1 opacity-60 transition hover:opacity-100 {focusRing}"
-                  title="Close {sessionLabel(s)}"
-                  aria-label="Close {sessionLabel(s)}"
+                  title={$t('nav-close-session', { session: sessionLabel(s) })}
+                  aria-label={$t('nav-close-session', { session: sessionLabel(s) })}
                   onclick={() => closeSession(s.id)}
                 >
                   <Icon name="close" size={14} />
@@ -155,16 +159,10 @@
       ? 'flex flex-col items-center gap-1'
       : 'flex items-center gap-1'}"
   >
-    <Button variant="icon" title="Command palette (⌘K)" onclick={() => palette.open()}>
+    <Button variant="icon" title={$t('nav-command-palette-shortcut')} onclick={() => palette.open()}>
       <Icon name="command" />
     </Button>
     <ThemeToggle />
-    <!-- Support/about overlay: free + open-source note and the two ways to help.
-         Opens a modal, not a screen, so it holds no highlight and never becomes the
-         active entity (§2). Sits left of the gear, icon-only so it survives collapse. -->
-    <Button variant="icon" title="Support OmnySSH" onclick={() => support.open()}>
-      <Icon name="telegram" />
-    </Button>
     <!-- Settings is a selector-like screen; the gear holds the active highlight like
          Dashboard/Snippets do, and stays icon-only so it survives collapse (§5.1). -->
     <button
@@ -173,8 +171,8 @@
       'settings'
         ? 'bg-accent text-accent-fg'
         : 'text-muted hover:bg-surface-inset hover:text-fg'}"
-      title="Settings"
-      aria-label="Settings"
+      title={$t('nav-settings')}
+      aria-label={$t('nav-settings')}
       aria-current={$activeEntity.kind === 'settings' ? 'page' : undefined}
       onclick={() => activeEntity.selectSettings()}
     >

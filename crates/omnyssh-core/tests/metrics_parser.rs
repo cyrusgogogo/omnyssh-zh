@@ -169,6 +169,23 @@ fn ram_vmstat_macos() {
 }
 
 #[test]
+fn ram_vmstat_macos_excludes_file_backed_cache() {
+    // 16 GiB total with 1 GiB free and 6.5 GiB file-backed cache. Activity
+    // Monitor lists that cache separately from Memory Used, so effective
+    // usage should match total-minus-available: 8.5 / 16 = 53.125%.
+    let vm_stat = "Mach Virtual Memory Statistics: (page size of 4096 bytes)\n\
+                   Pages free:                              262144.\n\
+                   Pages active:                           1310720.\n\
+                   Pages inactive:                         1572864.\n\
+                   Pages speculative:                       131072.\n\
+                   Pages wired down:                        655360.\n\
+                   File-backed pages:                      1703936.\n";
+    let memsize = "hw.memsize: 17179869184";
+    let pct = parse_ram_vmstat(vm_stat, memsize).expect("parse vm_stat with inactive cache");
+    assert!((pct - 53.125).abs() < 0.01, "expected 53.125%, got {pct}");
+}
+
+#[test]
 fn ram_vmstat_empty_returns_none() {
     assert!(parse_ram_vmstat("", "").is_none());
     assert!(parse_ram_vmstat("", "hw.memsize: 0").is_none());

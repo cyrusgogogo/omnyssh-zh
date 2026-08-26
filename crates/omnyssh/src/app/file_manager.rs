@@ -308,7 +308,7 @@ impl App {
             state.hosts.get(idx).cloned()
         };
         let Some(host) = host else {
-            self.view.status_message = Some("Host not found.".to_string());
+            self.view.status_message = Some(crate::i18n::tr("status-host-not-found"));
             return;
         };
 
@@ -319,7 +319,10 @@ impl App {
         self.view.file_manager.connected_host = None;
         self.view.file_manager.remote = FilePanelView::default();
 
-        self.view.status_message = Some(format!("Connecting to '{}'… (30s timeout)", host.name));
+        self.view.status_message = Some(crate::i18n::tr_args(
+            "status-connecting-host",
+            &[("host", &host.name)],
+        ));
         self.view.file_manager.sftp_connecting = true;
 
         // Spawn connection in background with 30s timeout to prevent UI freeze
@@ -446,19 +449,19 @@ impl App {
     /// by the background task. `pending_ops` tracks how many are still in flight.
     pub(crate) async fn fm_paste(&mut self) {
         let Some(clipboard) = self.view.file_manager.clipboard.clone() else {
-            self.view.status_message = Some("Nothing in clipboard.".to_string());
+            self.view.status_message = Some(crate::i18n::tr("status-clipboard-empty"));
             return;
         };
 
         let dst_panel = self.view.file_manager.active_panel.clone();
 
         if clipboard.source_panel == dst_panel {
-            self.view.status_message = Some("Cannot paste to the same panel.".to_string());
+            self.view.status_message = Some(crate::i18n::tr("status-paste-same-panel"));
             return;
         }
 
         if clipboard.paths.is_empty() {
-            self.view.status_message = Some("Clipboard is empty.".to_string());
+            self.view.status_message = Some(crate::i18n::tr("status-clipboard-empty"));
             return;
         }
 
@@ -518,7 +521,10 @@ impl App {
         }
 
         if count > 1 {
-            self.view.status_message = Some(format!("Queued {count} files for transfer…"));
+            self.view.status_message = Some(crate::i18n::tr_args(
+                "status-transfer-queued",
+                &[("count", &count.to_string())],
+            ));
         }
     }
 

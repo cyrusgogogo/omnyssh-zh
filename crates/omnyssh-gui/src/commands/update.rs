@@ -34,25 +34,28 @@ pub async fn check_update() -> Result<Option<UpdateInfoDto>, CommandError> {
 #[tauri::command]
 #[specta::specta]
 pub async fn install_update(app: AppHandle) -> Result<(), CommandError> {
-    let updater = app.updater().map_err(|e| CommandError {
-        message: format!("Self-update is not available yet: {e}"),
+    let updater = app.updater().map_err(|e| {
+        CommandError::new(
+            "update-install",
+            format!("Self-update is not available yet: {e}"),
+        )
     })?;
     match updater.check().await {
         Ok(Some(update)) => {
             update
                 .download_and_install(|_, _| {}, || {})
                 .await
-                .map_err(|e| CommandError {
-                    message: format!("Update failed: {e}"),
-                })?;
+                .map_err(|e| CommandError::new("update-install", format!("Update failed: {e}")))?;
             app.restart();
         }
-        Ok(None) => Err(CommandError {
-            message: "No update is currently available to install.".to_string(),
-        }),
-        Err(e) => Err(CommandError {
-            message: format!("Self-update is not available yet: {e}"),
-        }),
+        Ok(None) => Err(CommandError::new(
+            "update-install",
+            "No update is currently available to install.",
+        )),
+        Err(e) => Err(CommandError::new(
+            "update-install",
+            format!("Self-update is not available yet: {e}"),
+        )),
     }
 }
 
@@ -62,12 +65,8 @@ pub async fn install_update(app: AppHandle) -> Result<(), CommandError> {
 pub async fn load_update_config() -> Result<UpdateConfigDto, CommandError> {
     let config = tauri::async_runtime::spawn_blocking(|| load_app_config(None))
         .await
-        .map_err(|e| CommandError {
-            message: format!("config load task failed: {e}"),
-        })?
-        .map_err(|e| CommandError {
-            message: e.to_string(),
-        })?;
+        .map_err(|e| CommandError::new("update-config", format!("config load task failed: {e}")))?
+        .map_err(|e| CommandError::new("update-config", e.to_string()))?;
     Ok((&config.update).into())
 }
 
@@ -79,12 +78,8 @@ pub async fn save_update_config(config: UpdateConfigDto) -> Result<(), CommandEr
     let update = config.into();
     tauri::async_runtime::spawn_blocking(move || core_save_update_config(&update))
         .await
-        .map_err(|e| CommandError {
-            message: format!("config save task failed: {e}"),
-        })?
-        .map_err(|e| CommandError {
-            message: e.to_string(),
-        })
+        .map_err(|e| CommandError::new("update-config", format!("config save task failed: {e}")))?
+        .map_err(|e| CommandError::new("update-config", e.to_string()))
 }
 
 /// The startup update check (tech-gui.md §3.4/§4.3): honour `check_on_startup` and the

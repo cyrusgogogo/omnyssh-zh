@@ -4,6 +4,8 @@
      away — only visibility toggles. The list_hosts call feeds the status-bar count. -->
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import { page } from '$app/stores';
   import { listHosts } from '$lib/ipc/commands';
   import { hosts } from '$lib/stores/hosts';
   import { lastError } from '$lib/stores/notifications';
@@ -13,12 +15,20 @@
   import Dashboard from '$lib/screens/Dashboard.svelte';
   import Snippets from '$lib/screens/Snippets.svelte';
   import Settings from '$lib/screens/Settings.svelte';
+  import SshConfig from '$lib/screens/SshConfig.svelte';
   import TerminalView from '$lib/screens/TerminalView.svelte';
   import SftpView from '$lib/screens/SftpView.svelte';
+  import DesktopCardWidget from '$lib/screens/DesktopCardWidget.svelte';
+  import { desktopCardHosts } from '$lib/stores/desktopCards';
 
   onMount(async () => {
     try {
-      hosts.set(await listHosts());
+      const loaded = await listHosts();
+      hosts.set(loaded);
+      if (new URLSearchParams(window.location.search).get('view') === 'desktop-card') {
+        const available = new Set(loaded.map((host) => host.name));
+        desktopCardHosts.set(get(desktopCardHosts).filter((name) => available.has(name)));
+      }
     } catch (err) {
       lastError.set(err instanceof Error ? err.message : String(err));
     }
@@ -30,10 +40,15 @@
   const selectorActive = $derived(
     $activeEntity.kind === 'dashboard' ||
       $activeEntity.kind === 'snippets' ||
+      $activeEntity.kind === 'sshConfig' ||
       $activeEntity.kind === 'settings'
   );
+  const desktopCardView = $derived($page.url.searchParams.get('view') === 'desktop-card');
 </script>
 
+{#if desktopCardView}
+  <DesktopCardWidget />
+{:else}
 <AppShell>
   <div class="relative h-full">
     {#each $sessions as s (s.id)}
@@ -55,9 +70,12 @@
             <Snippets />
           {:else if $activeEntity.kind === 'settings'}
             <Settings />
+          {:else if $activeEntity.kind === 'sshConfig'}
+            <SshConfig />
           {/if}
         </div>
       </div>
     {/if}
   </div>
 </AppShell>
+{/if}

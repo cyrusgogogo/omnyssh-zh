@@ -1,0 +1,38 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH omny 1 "omny 1.0.0"
+.SH 名称
+omny \- TUI SSH 概览与服务器管理工具
+.SH 概要
+\fBomny\fR [\fB\-c\fR|\fB\-\-config\fR] [\fB\-t\fR|\fB\-\-theme\fR] [\fB\-l\fR|\fB\-\-language\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR]
+.SH 说明
+OmnySSH 在一个终端窗口中管理 SSH 主机，提供实时指标概览、SFTP 文件管理、命令片段和多会话终端。
+.SH 选项
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<FILE>\fR
+使用指定配置文件。
+
+默认路径为 Linux 的 ~/.config/omnyssh/config.toml、macOS 的 ~/Library/Application Support/omnyssh/config.toml 或 Windows 的 %APPDATA%\\omnyssh\\config.toml。
+.TP
+\fB\-t\fR, \fB\-\-theme\fR \fI<THEME>\fR
+覆盖配色主题（default | dracula | nord | gruvbox）。
+
+所选主题会保存到配置文件，后续启动无需再次传入此参数。
+.TP
+\fB\-l\fR, \fB\-\-language\fR \fI<LOCALE>\fR
+仅为本次运行覆盖界面语言（system | en\-US | zh\-CN）。
+
+与应用内选择不同，此参数不会修改配置文件。
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+启用详细调试日志；日志写入配置目录。
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+显示帮助（使用 \*(Aq\-h\*(Aq 查看摘要）。
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+显示版本。
+.SH 配置
+在 `[ui]` 中设置 `language = "system"`、`"en-US"` 或 `"zh-CN"`。运行中按 Shift+L 可选择语言并持久化；`--language` 仅影响当前会话。
+.SH 版本
+v1.0.0

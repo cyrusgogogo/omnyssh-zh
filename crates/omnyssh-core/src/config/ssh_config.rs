@@ -1,7 +1,7 @@
 //! Parser for `~/.ssh/config`.
 //!
 //! Supported directives: `Host`, `HostName`, `User`, `Port`,
-//! `IdentityFile`, `ProxyJump`, `Include`.
+//! `IdentityFile`, `ProxyJump`, `Ciphers`, `Include`.
 //!
 //! The original file is **never modified**.
 
@@ -93,6 +93,16 @@ fn parse_content(
                     current = None;
                 }
             }
+            "match" => {
+                // `Match` terminates the preceding Host block. We do not
+                // evaluate its conditions, but its directives must never leak
+                // into the previous imported host.
+                if let Some(h) = current.take() {
+                    hosts.push(h);
+                }
+                hosts.append(&mut deferred);
+                in_wildcard = true;
+            }
             "hostname" if !in_wildcard => {
                 if let Some(ref mut h) = current {
                     h.hostname = value.to_string();
@@ -118,6 +128,11 @@ fn parse_content(
             "proxyjump" if !in_wildcard => {
                 if let Some(ref mut h) = current {
                     h.proxy_jump = Some(value.to_string());
+                }
+            }
+            "ciphers" if !in_wildcard => {
+                if let Some(ref mut h) = current {
+                    h.ciphers = Some(value.to_string());
                 }
             }
             // An Include may sit inside a Host block; the enclosing host keeps
@@ -451,5 +466,23 @@ host server1
         assert_eq!(hosts.len(), 1);
         assert_eq!(hosts[0].hostname, "10.0.0.1");
         assert_eq!(hosts[0].user, "admin");
+    }
+
+    #[test]
+    fn ciphers_append_is_retained_for_connection_negotiation() {
+        let hosts =
+            parse_ssh_config("Host legacy\n  HostName legacy.example.com\n  Ciphers +aes256-cbc\n");
+
+        let serialized = toml::to_string(&hosts[0]).unwrap();
+        assert!(serialized.contains("aes256-cbc"));
+    }
+
+    #[test]
+    fn match_directives_do_not_mutate_the_previous_host() {
+        let hosts = parse_ssh_config(
+            "Host prod\n  HostName prod.example\n  User deploy\nMatch exec true\n  User attacker\n",
+        );
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].user, "deploy");
     }
 }

@@ -10,16 +10,26 @@
   import type { HostDto, HostInputDto } from '$lib/bindings';
   import { Surface, Chip, StatusDot, Icon, Button, statusToken } from '$lib/theme';
   import { serverCards, filterHosts, QUICK_ACTIONS } from './serverCard';
-  import { spawnSession } from '$lib/stores/navigation';
+  import { openHostSession } from '$lib/stores/navigation';
   import { streamerMode, displayHostname } from '$lib/stores/streamer';
   import { hosts } from '$lib/stores/hosts';
   import { lastError } from '$lib/stores/notifications';
-  import { saveHost, deleteHost, reloadHosts, startKeySetup, refreshMetrics } from '$lib/ipc/commands';
+  import {
+    saveHost,
+    deleteHost,
+    reloadHosts,
+    startKeySetup,
+    refreshMetrics,
+    showDesktopCard,
+    closeDesktopCard
+  } from '$lib/ipc/commands';
   import { isRefreshHotkey } from '$lib/stores/ui';
   import { beginKeySetup, dismissKeySetup } from '$lib/stores/keySetup';
   import { emptyForm, formFromHost } from './hostForm';
   import HostEditor from './HostEditor.svelte';
   import Modal from '$lib/components/Modal.svelte';
+  import { t } from '$lib/i18n';
+  import { desktopCardHosts } from '$lib/stores/desktopCards';
 
   type Dialog = { kind: 'add' } | { kind: 'edit'; host: HostDto } | { kind: 'delete'; host: HostDto };
 
@@ -29,8 +39,13 @@
   // grid filters live. Frontend-only, like the snippet search — the core stays untouched.
   let query = $state('');
   let searchOpen = $state(false);
+  let showHidden = $state(false);
   let searchInput = $state<HTMLInputElement>();
-  const visibleCards = $derived(filterHosts($serverCards, query));
+  const hiddenCount = $derived($serverCards.filter((card) => card.host.hiddenFromOverview).length);
+  const overviewCards = $derived(
+    showHidden ? $serverCards : $serverCards.filter((card) => !card.host.hiddenFromOverview)
+  );
+  const visibleCards = $derived(filterHosts(overviewCards, query));
 
   function toggleSearch(): void {
     searchOpen = !searchOpen;
@@ -74,7 +89,7 @@
     // Adding: refuse a name already taken (a save would silently overwrite it). An
     // edit keeps its name (the name field is immutable, §4.1), so it can't collide.
     if (!previousName && get(hosts).some((h) => h.name === input.name)) {
-      throw new Error(`A host named "${input.name}" already exists`);
+      throw new Error(get(t)('validation-host-duplicate', { name: input.name }));
     }
     await saveHost(input);
     await reloadHosts();
@@ -97,11 +112,31 @@
   async function confirmDelete(name: string): Promise<void> {
     try {
       await deleteHost(name);
+      desktopCardHosts.remove(name);
       await reloadHosts();
     } catch (e) {
       lastError.set(message(e));
     }
     dialog = null;
+  }
+
+  async function toggleDesktopCard(hostName: string): Promise<void> {
+    const added = desktopCardHosts.toggle(hostName);
+    try {
+      if (added) await showDesktopCard();
+      else if (get(desktopCardHosts).length === 0) await closeDesktopCard();
+    } catch (e) {
+      desktopCardHosts.toggle(hostName);
+      lastError.set(message(e));
+    }
+  }
+
+  async function openDesktopCard(): Promise<void> {
+    try {
+      await showDesktopCard();
+    } catch (e) {
+      lastError.set(message(e));
+    }
   }
 
   // Shared pill used by the header/empty-state "Add host" and the per-card quick actions.
@@ -125,7 +160,7 @@
 
 <section class="min-h-full px-6 pb-8 pt-3">
   <div class="mb-5 flex items-center gap-3">
-    <h1 class="text-lg font-semibold tracking-tight">Dashboard</h1>
+    <h1 class="text-lg font-semibold tracking-tight">{$t('dashboard-title')}</h1>
     <div class="ml-auto flex items-center gap-2">
       <!-- Host search: a round toggle that slides a live filter field out to its left. -->
       <div class="flex items-center">
@@ -133,8 +168,8 @@
           bind:this={searchInput}
           bind:value={query}
           type="text"
-          placeholder="Search hosts…"
-          aria-label="Search hosts"
+          placeholder={$t('dashboard-search-placeholder')}
+          aria-label={$t('common-search')}
           disabled={!searchOpen}
           class="{search} {searchOpen
             ? 'mr-2 w-52 px-3 opacity-100'
@@ -146,8 +181,8 @@
         <button
           type="button"
           class={roundBtn}
-          title={searchOpen ? 'Close search' : 'Search hosts'}
-          aria-label={searchOpen ? 'Close search' : 'Search hosts'}
+          title={searchOpen ? $t('dashboard-close-search') : $t('dashboard-search')}
+          aria-label={searchOpen ? $t('dashboard-close-search') : $t('dashboard-search')}
           aria-expanded={searchOpen}
           onclick={toggleSearch}
         >
@@ -159,8 +194,8 @@
       <button
         type="button"
         class="{roundBtn} disabled:opacity-60"
-        title="Refresh metrics (R)"
-        aria-label="Refresh metrics"
+        title={$t('dashboard-refresh-shortcut')}
+        aria-label={$t('dashboard-refresh')}
         disabled={refreshing}
         onclick={() => refresh()}
       >
@@ -170,23 +205,49 @@
       </button>
       <button type="button" class={pill} onclick={() => (dialog = { kind: 'add' })}>
         <Icon name="plus" size={13} />
-        Add host
+        {$t('dashboard-add-host')}
       </button>
+      {#if $desktopCardHosts.length > 0}
+        <button type="button" class={pill} onclick={() => void openDesktopCard()}>
+          <Icon name="desktop-card" size={13} />
+          {$t('desktop-card-open', { count: $desktopCardHosts.length })}
+        </button>
+      {/if}
+      {#if hiddenCount > 0}
+        <button
+          type="button"
+          class={pill}
+          aria-pressed={showHidden}
+          onclick={() => (showHidden = !showHidden)}
+        >
+          {showHidden
+            ? $t('dashboard-hide-hidden')
+            : $t('dashboard-show-hidden', { count: hiddenCount })}
+        </button>
+      {/if}
     </div>
   </div>
 
   {#if $serverCards.length === 0}
     <div class="flex flex-col items-center justify-center gap-2 py-20 text-center">
-      <p class="font-medium">No servers yet</p>
-      <p class="text-sm text-muted">Add a host, or import one from your SSH config, to see it here.</p>
+      <p class="font-medium">{$t('dashboard-empty-title')}</p>
+      <p class="text-sm text-muted">{$t('dashboard-empty-description')}</p>
       <button type="button" class="{pill} mt-2" onclick={() => (dialog = { kind: 'add' })}>
         <Icon name="plus" size={13} />
-        Add host
+        {$t('dashboard-add-host')}
+      </button>
+    </div>
+  {:else if overviewCards.length === 0}
+    <div class="flex flex-col items-center justify-center gap-2 py-20 text-center">
+      <p class="font-medium">{$t('dashboard-all-hidden-title')}</p>
+      <p class="text-sm text-muted">{$t('dashboard-all-hidden-description')}</p>
+      <button type="button" class="{pill} mt-2" onclick={() => (showHidden = true)}>
+        {$t('dashboard-show-hidden', { count: hiddenCount })}
       </button>
     </div>
   {:else if visibleCards.length === 0}
     <div class="flex flex-col items-center justify-center gap-2 py-20 text-center">
-      <p class="text-sm text-muted">No hosts match “{query}”.</p>
+      <p class="text-sm text-muted">{$t('dashboard-no-query-results', { query })}</p>
     </div>
   {:else}
     <div class="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(19rem,1fr))]">
@@ -197,7 +258,7 @@
           <div class="flex flex-col gap-3">
             <div class="flex min-w-0 items-start gap-2.5">
               <span class="mt-1 shrink-0">
-                <StatusDot status={card.overall} size={9} label="{card.host.name} status" />
+                <StatusDot status={card.overall} size={9} label={$t('dashboard-host-status', { host: card.host.name })} />
               </span>
               <div class="min-w-0">
                 <div class="flex min-w-0 items-center gap-2">
@@ -205,9 +266,21 @@
                   {#if card.host.source === 'sshConfig'}
                     <span
                       class="shrink-0 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
-                      title="Imported from ~/.ssh/config — editing saves your own copy, which takes priority"
+                      title={$t('dashboard-import-description')}
                     >
-                      ssh config
+                      {$t('dashboard-ssh-config')}
+                    </span>
+                  {:else}
+                    <span
+                      class="shrink-0 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
+                      title={$t('dashboard-omnyssh-description')}
+                    >
+                      {$t('dashboard-omnyssh-config')}
+                    </span>
+                  {/if}
+                  {#if card.host.hiddenFromOverview}
+                    <span class="shrink-0 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint">
+                      {$t('dashboard-hidden-badge')}
                     </span>
                   {/if}
                   <!-- Auth-state reflection (tech-gui.md §4.2): key-only once password
@@ -215,18 +288,18 @@
                   {#if card.host.passwordAuthDisabled}
                     <span
                       class="inline-flex shrink-0 items-center gap-1 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
-                      title="Password authentication disabled — key only"
+                      title={$t('dashboard-key-only-description')}
                     >
                       <Icon name="shield" size={10} />
-                      key-only
+                      {$t('dashboard-key-only')}
                     </span>
                   {:else if card.host.hasKey}
                     <span
                       class="inline-flex shrink-0 items-center gap-1 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
-                      title="Key authentication configured"
+                      title={$t('dashboard-key-description')}
                     >
                       <Icon name="key" size={10} />
-                      key
+                      {$t('dashboard-key')}
                     </span>
                   {/if}
                 </div>
@@ -241,13 +314,29 @@
                 <button
                   type="button"
                   class={pill}
-                  title="{action.label} on {card.host.name}"
-                  onclick={() => spawnSession(action.kind, card.host.name)}
+                  title={$t('dashboard-action-on-host', { action: action.label, host: card.host.name })}
+                  onclick={() => openHostSession(action.kind, card.host.name)}
                 >
                   <Icon name={action.kind} size={13} />
-                  {action.label}
+                  {action.kind === 'sftp' ? $t('nav-files') : action.label}
                 </button>
               {/each}
+              <button
+                type="button"
+                class="{iconBtn} {$desktopCardHosts.includes(card.host.name)
+                  ? 'bg-surface-inset text-fg'
+                  : ''}"
+                title={$desktopCardHosts.includes(card.host.name)
+                  ? $t('desktop-card-remove', { host: card.host.name })
+                  : $t('desktop-card-add', { host: card.host.name })}
+                aria-label={$desktopCardHosts.includes(card.host.name)
+                  ? $t('desktop-card-remove', { host: card.host.name })
+                  : $t('desktop-card-add', { host: card.host.name })}
+                aria-pressed={$desktopCardHosts.includes(card.host.name)}
+                onclick={() => void toggleDesktopCard(card.host.name)}
+              >
+                <Icon name="desktop-card" size={14} />
+              </button>
               <!-- Key setup stays manual-only even though edit no longer is: it records
                    `key_setup_date`/`password_auth_disabled` through `save_hosts`, which
                    keeps manual entries only — on an import that outcome would be dropped.
@@ -256,8 +345,8 @@
                 <button
                   type="button"
                   class={iconBtn}
-                  title="Set up an SSH key for {card.host.name}"
-                  aria-label="Set up an SSH key for {card.host.name}"
+                  title={$t('dashboard-key-setup', { host: card.host.name })}
+                  aria-label={$t('dashboard-key-setup', { host: card.host.name })}
                   onclick={() => setupKey(card.host)}
                 >
                   <Icon name="key" size={14} />
@@ -269,8 +358,8 @@
               <button
                 type="button"
                 class={iconBtn}
-                title="Edit {card.host.name}"
-                aria-label="Edit {card.host.name}"
+                title={$t('dashboard-edit', { host: card.host.name })}
+                aria-label={$t('dashboard-edit', { host: card.host.name })}
                 onclick={() => (dialog = { kind: 'edit', host: card.host })}
               >
                 <Icon name="edit" size={14} />
@@ -279,8 +368,8 @@
                 <button
                   type="button"
                   class={iconBtn}
-                  title="Delete {card.host.name}"
-                  aria-label="Delete {card.host.name}"
+                  title={$t('dashboard-delete', { host: card.host.name })}
+                  aria-label={$t('dashboard-delete', { host: card.host.name })}
                   onclick={() => (dialog = { kind: 'delete', host: card.host })}
                 >
                   <Icon name="trash" size={14} />
@@ -295,10 +384,10 @@
               class="rounded-lg bg-surface-inset px-3 py-3 text-center text-xs"
               style="color: {statusToken(card.overall)};"
             >
-              {card.reachability}{card.host.monitorPort ? ` · port ${card.host.monitorPort}` : ''}
+              {card.reachability}{card.host.monitorPort ? ` · ${$t('host-editor-port').toLowerCase()} ${card.host.monitorPort}` : ''}
             </div>
           {:else if card.offline}
-            <div class="rounded-lg bg-surface-inset px-3 py-3 text-center text-xs text-faint">offline</div>
+            <div class="rounded-lg bg-surface-inset px-3 py-3 text-center text-xs text-faint">{$t('dashboard-status-offline')}</div>
           {:else}
             <div class="space-y-2">
               {#each card.metricRows as row (row.label)}
@@ -325,7 +414,7 @@
 
             {#if card.uptime || card.osInfo}
               <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                {#if card.uptime}<span>up {card.uptime}</span>{/if}
+                {#if card.uptime}<span>{$t('dashboard-up-for', { uptime: card.uptime })}</span>{/if}
                 {#if card.uptime && card.osInfo}<span class="text-faint">·</span>{/if}
                 {#if card.osInfo}<span class="min-w-0 truncate">{card.osInfo}</span>{/if}
               </div>
@@ -351,7 +440,7 @@
               {/each}
             </div>
           {:else if card.servicesError}
-            <div class="text-xs text-faint">Service scan unavailable</div>
+            <div class="text-xs text-faint">{$t('dashboard-services-unavailable')}</div>
           {/if}
         </Surface>
       {/each}
@@ -373,16 +462,15 @@
   />
 {:else if dialog?.kind === 'delete'}
   {@const host = dialog.host}
-  <Modal label="Delete host" onClose={() => (dialog = null)}>
+  <Modal label={$t('dashboard-delete-host-title')} onClose={() => (dialog = null)}>
     <div class="space-y-3 px-5 py-4">
-      <h2 class="text-sm font-semibold">Delete host</h2>
+      <h2 class="text-sm font-semibold">{$t('dashboard-delete-host-title')}</h2>
       <p class="text-sm text-muted">
-        Delete “{host.name}”? This removes it from <span class="font-mono">hosts.toml</span>. If
-        your SSH config defines the same name, it comes back as an import.
+        {$t('dashboard-delete-host-description-before', { host: host.name })}<span class="font-mono">hosts.toml</span>{$t('dashboard-delete-host-description-after')}
       </p>
       <div class="flex justify-end gap-2 pt-1">
-        <Button variant="ghost" onclick={() => (dialog = null)}>Cancel</Button>
-        <Button variant="primary" onclick={() => confirmDelete(host.name)}>Delete</Button>
+        <Button variant="ghost" onclick={() => (dialog = null)}>{$t('common-cancel')}</Button>
+        <Button variant="primary" onclick={() => confirmDelete(host.name)}>{$t('common-delete')}</Button>
       </div>
     </div>
   </Modal>

@@ -179,7 +179,7 @@ impl App {
             state.hosts.get(host_idx).cloned()
         };
         let Some(host) = host else {
-            self.view.status_message = Some("No such host.".to_string());
+            self.view.status_message = Some(crate::i18n::tr("status-host-not-found"));
             return;
         };
         let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
@@ -214,7 +214,10 @@ impl App {
                 );
             }
             Err(e) => {
-                self.view.status_message = Some(format!("PTY error: {e}"));
+                self.view.status_message = Some(crate::i18n::tr_args(
+                    "status-pty-error",
+                    &[("error", &e.to_string())],
+                ));
             }
         }
     }
@@ -227,7 +230,7 @@ impl App {
             state.hosts.get(host_idx).cloned()
         };
         let Some(host) = host else {
-            self.view.status_message = Some("No such host.".to_string());
+            self.view.status_message = Some(crate::i18n::tr("status-host-not-found"));
             return;
         };
 
@@ -288,7 +291,10 @@ impl App {
                 );
             }
             Err(e) => {
-                self.view.status_message = Some(format!("PTY error: {e}"));
+                self.view.status_message = Some(crate::i18n::tr_args(
+                    "status-pty-error",
+                    &[("error", &e.to_string())],
+                ));
             }
         }
     }

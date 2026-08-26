@@ -10,6 +10,8 @@
 pub mod app_config;
 pub mod snippets;
 pub mod ssh_config;
+pub mod ssh_config_manager;
+pub mod ssh_key_manager;
 
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
@@ -134,7 +136,21 @@ pub fn load_all_hosts() -> anyhow::Result<Vec<Host>> {
 /// Manual entries come first and take priority: an SSH-config host is dropped
 /// when a manual host already uses its name, or when a manual host records it
 /// as a renamed original (via `original_ssh_host`).
-pub(crate) fn merge_hosts(manual: Vec<Host>, ssh_hosts: Vec<Host>) -> Vec<Host> {
+pub(crate) fn merge_hosts(mut manual: Vec<Host>, ssh_hosts: Vec<Host>) -> Vec<Host> {
+    // A manual entry owns OmnySSH-only data (password, tags, monitoring, notes),
+    // but OpenSSH connection policy for the same alias still has to reach the
+    // native client. This is especially important for opt-in legacy algorithms:
+    // dropping `Ciphers +aes256-cbc` here makes the system ssh client work while
+    // every OmnySSH connection fails before authentication.
+    for manual_host in &mut manual {
+        if manual_host.ciphers.is_none() {
+            manual_host.ciphers = ssh_hosts
+                .iter()
+                .find(|ssh_host| ssh_host.name == manual_host.name)
+                .and_then(|ssh_host| ssh_host.ciphers.clone());
+        }
+    }
+
     let manual_names: std::collections::HashSet<String> =
         manual.iter().map(|h| h.name.clone()).collect();
 
@@ -218,6 +234,19 @@ mod tests {
     }
 
     #[test]
+    fn merge_name_collision_keeps_ssh_cipher_policy_for_native_connection() {
+        let manual = host("legacy", HostSource::Manual);
+        let mut ssh = host("legacy", HostSource::SshConfig);
+        ssh.ciphers = Some("+aes256-cbc".to_string());
+
+        let out = merge_hosts(vec![manual], vec![ssh]);
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].source, HostSource::Manual);
+        assert_eq!(out[0].ciphers.as_deref(), Some("+aes256-cbc"));
+    }
+
+    #[test]
     fn merge_renamed_ssh_host_excluded() {
         let out = merge_hosts(
             vec![renamed("new", "old")],
@@ -273,6 +302,7 @@ mod tests {
         h.user = "deploy".to_string();
         h.port = 2222;
         h.tags = vec!["prod".to_string()];
+        h.hidden_from_overview = true;
         let toml_str = toml::to_string_pretty(&HostsFile { hosts: vec![h] }).unwrap();
         let parsed: HostsFile = toml::from_str(&toml_str).unwrap();
         assert_eq!(parsed.hosts.len(), 1);
@@ -282,6 +312,7 @@ mod tests {
         assert_eq!(g.user, "deploy");
         assert_eq!(g.port, 2222);
         assert_eq!(g.tags, vec!["prod"]);
+        assert!(g.hidden_from_overview);
     }
 
     #[test]
@@ -303,6 +334,15 @@ mod tests {
     fn hostsfile_empty_input_parses_to_empty() {
         let parsed: HostsFile = toml::from_str("").unwrap();
         assert!(parsed.hosts.is_empty());
+    }
+
+    #[test]
+    fn hostsfile_old_entry_defaults_to_visible() {
+        let parsed: HostsFile = toml::from_str(
+            "[[hosts]]\nname = \"old\"\nhostname = \"example.com\"\nuser = \"root\"\nport = 22\n",
+        )
+        .unwrap();
+        assert!(!parsed.hosts[0].hidden_from_overview);
     }
 
     #[test]

@@ -5,9 +5,10 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
     Frame,
 };
+use std::borrow::Cow;
 
 use crate::app::{
-    FormField, HostForm, SnippetForm, SnippetResultEntry, UpdateButton, UpdatePopup,
+    FormField, HostForm, LanguagePopup, SnippetForm, SnippetResultEntry, UpdateButton, UpdatePopup,
     UpdatePopupPhase, FORM_FIELD_LABELS, SNIPPET_FORM_FIELD_LABELS, UPDATE_BUTTONS,
 };
 use crate::ui::theme::Theme;
@@ -39,12 +40,88 @@ pub fn centred_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
         .split(layout_v[1])[1]
 }
 
+fn form_label(label: &str) -> String {
+    let key = match label {
+        "Name" => "host-name",
+        "Hostname / IP" => "host-hostname",
+        "User" => "host-user",
+        "Port" => "host-port",
+        "Identity File" => "host-identity-file",
+        "Password (optional)" => "host-password-optional",
+        "Tags (comma-sep)" => "host-tags-comma",
+        "Notes" => "host-notes",
+        "Monitoring (ssh | tcp | tcp:PORT)" => "host-monitoring-input",
+        "Hidden from overview (yes | no)" => "host-hidden-overview-input",
+        "Command" => "snippets-command",
+        "Scope (global / host)" => "snippets-scope-input",
+        "Host (if scope=host)" => "snippets-host-input",
+        "Params (comma-sep)" => "snippets-params-comma",
+        _ => return label.to_string(),
+    };
+    crate::i18n::tr(key)
+}
+
+pub fn render_language(frame: &mut Frame, popup: &LanguagePopup, theme: &Theme) {
+    let area = centred_rect(46, 38, frame.area());
+    frame.render_widget(Clear, area);
+    let block = Block::default()
+        .title(format!(" {} ", crate::i18n::tr("language-title")))
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(theme.accent));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let labels = [
+        crate::i18n::tr("language-system"),
+        crate::i18n::tr("language-english"),
+        crate::i18n::tr("language-chinese"),
+    ];
+    let items: Vec<ListItem> = labels
+        .iter()
+        .enumerate()
+        .map(|(index, label)| {
+            let marker = if index == popup.selected {
+                "› "
+            } else {
+                "  "
+            };
+            ListItem::new(format!("{marker}{label}"))
+        })
+        .collect();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(3), Constraint::Length(2)])
+        .split(inner);
+    let mut state = ListState::default().with_selected(Some(popup.selected));
+    frame.render_stateful_widget(
+        List::new(items).highlight_style(
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+        ),
+        chunks[0],
+        &mut state,
+    );
+    frame.render_widget(
+        Paragraph::new(crate::i18n::tr("language-hint"))
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(theme.text_muted)),
+        chunks[1],
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Help popup
 // ---------------------------------------------------------------------------
 
 /// Renders the built-in help popup listing all key bindings organized by screen.
 pub fn render_help(frame: &mut Frame, theme: &Theme) {
+    if crate::i18n::current_locale() == omnyssh_core::locale::ZH_CN {
+        render_help_zh(frame, theme);
+        return;
+    }
     let area = centred_rect(95, 85, frame.area());
     frame.render_widget(Clear, area);
 
@@ -307,6 +384,116 @@ pub fn render_help(frame: &mut Frame, theme: &Theme) {
     frame.render_widget(Paragraph::new(col3_lines), columns[2]);
 }
 
+fn render_help_zh(frame: &mut Frame, theme: &Theme) {
+    let area = centred_rect(95, 85, frame.area());
+    frame.render_widget(Clear, area);
+    let block = Block::default()
+        .title(format!(" {} ", crate::i18n::tr("help-title")))
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(theme.warning_border));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let section = Style::default()
+        .fg(theme.text_warning)
+        .add_modifier(Modifier::BOLD);
+    let key = Style::default()
+        .fg(theme.accent)
+        .add_modifier(Modifier::BOLD);
+    let text = Style::default().fg(theme.text_primary);
+    let row = |shortcut: &'static str, description: &'static str| {
+        Line::from(vec![
+            Span::styled(format!("  {shortcut:<12}"), key),
+            Span::styled(description, text),
+        ])
+    };
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(33),
+            Constraint::Percentage(33),
+            Constraint::Percentage(34),
+        ])
+        .split(inner);
+
+    let col1 = vec![
+        Line::from(""),
+        Line::from(Span::styled(" 全局导航", section)),
+        row("1", "概览"),
+        row("2", "文件管理"),
+        row("3", "命令片段"),
+        row("4", "终端"),
+        row("Shift+L", "选择语言"),
+        row("?", "帮助"),
+        row("q", "退出"),
+        Line::from(""),
+        Line::from(Span::styled(" 概览", section)),
+        row("Enter", "打开详情"),
+        row("a/e/d", "添加/编辑/删除主机"),
+        row("r", "刷新"),
+        row("s", "排序"),
+        row("t", "筛选标签"),
+        row("/", "搜索"),
+        row("x", "快速执行"),
+        row("Shift+K", "配置 SSH 密钥"),
+        row("h/j/k/l", "导航"),
+    ];
+    let col2 = vec![
+        Line::from(""),
+        Line::from(Span::styled(" 主机详情", section)),
+        row("Enter", "连接"),
+        row("r", "刷新"),
+        row("Esc", "返回"),
+        row("1-4", "快速切换"),
+        Line::from(""),
+        Line::from(Span::styled(" 文件管理", section)),
+        row("h/j/k/l", "导航"),
+        row("Tab", "切换面板"),
+        row("Space", "标记文件"),
+        row("c/p", "复制/粘贴"),
+        row("n", "新建目录"),
+        row("Shift+R", "重命名"),
+        row("Shift+D", "删除"),
+        row("Shift+H", "连接主机"),
+        row(".", "显示隐藏文件"),
+        Line::from(""),
+        Line::from(Span::styled(" 命令片段", section)),
+        row("Enter", "运行"),
+        row("n/e/d", "新建/编辑/删除"),
+        row("b", "批量运行"),
+        row("/", "搜索"),
+    ];
+    let col3 = vec![
+        Line::from(""),
+        Line::from(Span::styled(" 终端", section)),
+        row("Ctrl+T", "新建标签页"),
+        row("Ctrl+W", "关闭标签页"),
+        row("Ctrl+N", "下一标签页"),
+        row("Ctrl+[", "垂直分割"),
+        row("Ctrl+]", "水平分割"),
+        row("Ctrl+Q", "退出"),
+        Line::from(""),
+        Line::from(Span::styled(" 复制文本", section)),
+        row("鼠标拖动", "选择文本"),
+        row("Cmd/Ctrl+C", "复制"),
+        Line::from(""),
+        Line::from(Span::styled(
+            " 仅在终端屏幕中有效",
+            Style::default().fg(theme.text_muted),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            " 按 Esc 或 ? 关闭",
+            Style::default().fg(theme.text_muted),
+        )),
+    ];
+    frame.render_widget(Paragraph::new(col1), columns[0]);
+    frame.render_widget(Paragraph::new(col2), columns[1]);
+    frame.render_widget(Paragraph::new(col3), columns[2]);
+}
+
 // ---------------------------------------------------------------------------
 // Host form (Add / Edit)
 // ---------------------------------------------------------------------------
@@ -374,7 +561,7 @@ pub fn render_host_form(frame: &mut Frame, form: &HostForm, title: &str, theme: 
 
         // Label
         let lbl_span = Span::styled(
-            format!("  {}: ", label),
+            format!("  {}: ", form_label(label)),
             if is_focused {
                 focused_label_style
             } else {
@@ -415,21 +602,30 @@ pub fn render_host_form(frame: &mut Frame, form: &HostForm, title: &str, theme: 
                     .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":next  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("status-next-field")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "Enter",
                 Style::default()
                     .fg(theme.text_success)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":save  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("common-save")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "Esc",
                 Style::default()
                     .fg(theme.text_warning)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":cancel", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("common-cancel")),
+                Style::default().fg(theme.text_muted),
+            ),
         ]);
         frame.render_widget(Paragraph::new(hint), rows[hint_row_idx]);
     }
@@ -458,8 +654,8 @@ pub fn render_tag_filter_popup(
     frame.render_widget(Clear, area);
 
     let title = match active_filter {
-        Some(t) => format!(" Filter by tag [{}] ", t),
-        None => " Filter by tag ".to_string(),
+        Some(t) => format!(" {} [{}] ", crate::i18n::tr("tag-filter-title"), t),
+        None => format!(" {} ", crate::i18n::tr("tag-filter-title")),
     };
 
     let block = Block::default()
@@ -476,7 +672,7 @@ pub fn render_tag_filter_popup(
     let mut items: Vec<ListItem> = vec![ListItem::new(Line::from(vec![
         Span::styled("  ", Style::default()),
         Span::styled(
-            "All (clear filter)",
+            crate::i18n::tr("tag-filter-all"),
             Style::default()
                 .fg(theme.text_secondary)
                 .add_modifier(Modifier::ITALIC),
@@ -518,14 +714,20 @@ pub fn render_tag_filter_popup(
                         .fg(theme.text_success)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(":select  ", Style::default().fg(theme.text_muted)),
+                Span::styled(
+                    format!(":{}  ", crate::i18n::tr("common-select")),
+                    Style::default().fg(theme.text_muted),
+                ),
                 Span::styled(
                     "Esc",
                     Style::default()
                         .fg(theme.text_warning)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(":close", Style::default().fg(theme.text_muted)),
+                Span::styled(
+                    format!(":{}", crate::i18n::tr("common-close")),
+                    Style::default().fg(theme.text_muted),
+                ),
             ])),
             hint_area,
         );
@@ -538,7 +740,7 @@ pub fn render_delete_confirm(frame: &mut Frame, host_name: &str, theme: &Theme) 
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Confirm Delete ")
+        .title(format!(" {} ", crate::i18n::tr("host-delete-title")))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -560,7 +762,10 @@ pub fn render_delete_confirm(frame: &mut Frame, host_name: &str, theme: &Theme) 
 
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            format!("  Delete host '{}'?", host_name),
+            format!(
+                "  {}",
+                crate::i18n::tr_args("host-delete-question", &[("name", host_name)])
+            ),
             Style::default()
                 .fg(theme.text_primary)
                 .add_modifier(Modifier::BOLD),
@@ -570,7 +775,7 @@ pub fn render_delete_confirm(frame: &mut Frame, host_name: &str, theme: &Theme) 
 
     frame.render_widget(
         Paragraph::new(Line::from(vec![Span::styled(
-            "  This cannot be undone.  ",
+            format!("  {}  ", crate::i18n::tr("files-cannot-undo")),
             Style::default().fg(theme.text_muted),
         )])),
         rows[2],
@@ -585,14 +790,20 @@ pub fn render_delete_confirm(frame: &mut Frame, host_name: &str, theme: &Theme) 
                     .fg(theme.text_error)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":Yes  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("common-yes")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "n / Esc",
                 Style::default()
                     .fg(theme.text_success)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":No", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("common-no")),
+                Style::default().fg(theme.text_muted),
+            ),
         ])),
         rows[3],
     );
@@ -653,7 +864,7 @@ pub fn render_snippet_form(frame: &mut Frame, form: &SnippetForm, title: &str, t
 
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
-                format!("  {}: ", label),
+                format!("  {}: ", form_label(label)),
                 if is_focused {
                     focused_label_style
                 } else {
@@ -694,21 +905,30 @@ pub fn render_snippet_form(frame: &mut Frame, form: &SnippetForm, title: &str, t
                         .fg(theme.accent)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(":next  ", Style::default().fg(theme.text_muted)),
+                Span::styled(
+                    format!(":{}  ", crate::i18n::tr("status-next-field")),
+                    Style::default().fg(theme.text_muted),
+                ),
                 Span::styled(
                     "Enter",
                     Style::default()
                         .fg(theme.text_success)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(":save  ", Style::default().fg(theme.text_muted)),
+                Span::styled(
+                    format!(":{}  ", crate::i18n::tr("common-save")),
+                    Style::default().fg(theme.text_muted),
+                ),
                 Span::styled(
                     "Esc",
                     Style::default()
                         .fg(theme.text_warning)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(":cancel", Style::default().fg(theme.text_muted)),
+                Span::styled(
+                    format!(":{}", crate::i18n::tr("common-cancel")),
+                    Style::default().fg(theme.text_muted),
+                ),
             ])),
             rows[hint_row_idx],
         );
@@ -721,7 +941,7 @@ pub fn render_snippet_delete_confirm(frame: &mut Frame, snippet_name: &str, them
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Confirm Delete Snippet ")
+        .title(format!(" {} ", crate::i18n::tr("snippet-delete-title")))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -743,7 +963,10 @@ pub fn render_snippet_delete_confirm(frame: &mut Frame, snippet_name: &str, them
 
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            format!("  Delete snippet '{}'?", snippet_name),
+            format!(
+                "  {}",
+                crate::i18n::tr_args("snippet-delete-question", &[("name", snippet_name)])
+            ),
             Style::default()
                 .fg(theme.text_primary)
                 .add_modifier(Modifier::BOLD),
@@ -753,7 +976,7 @@ pub fn render_snippet_delete_confirm(frame: &mut Frame, snippet_name: &str, them
 
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "  This cannot be undone.",
+            format!("  {}", crate::i18n::tr("files-cannot-undo")),
             Style::default().fg(theme.text_muted),
         ))),
         rows[2],
@@ -768,14 +991,20 @@ pub fn render_snippet_delete_confirm(frame: &mut Frame, snippet_name: &str, them
                     .fg(theme.text_error)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":Yes  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("common-yes")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "n / Esc",
                 Style::default()
                     .fg(theme.text_success)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":No", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("common-no")),
+                Style::default().fg(theme.text_muted),
+            ),
         ])),
         rows[3],
     );
@@ -794,7 +1023,11 @@ pub fn render_param_input(
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(format!(" Parameters — {} ", snippet_name))
+        .title(format!(
+            " {} — {} ",
+            crate::i18n::tr("snippets-params"),
+            snippet_name
+        ))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -880,21 +1113,30 @@ pub fn render_param_input(
                         .fg(theme.text_warning)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(":next  ", Style::default().fg(theme.text_muted)),
+                Span::styled(
+                    format!(":{}  ", crate::i18n::tr("status-next-param")),
+                    Style::default().fg(theme.text_muted),
+                ),
                 Span::styled(
                     "Enter",
                     Style::default()
                         .fg(theme.text_success)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(":run  ", Style::default().fg(theme.text_muted)),
+                Span::styled(
+                    format!(":{}  ", crate::i18n::tr("snippets-run")),
+                    Style::default().fg(theme.text_muted),
+                ),
                 Span::styled(
                     "Esc",
                     Style::default()
                         .fg(theme.text_warning)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(":cancel", Style::default().fg(theme.text_muted)),
+                Span::styled(
+                    format!(":{}", crate::i18n::tr("common-cancel")),
+                    Style::default().fg(theme.text_muted),
+                ),
             ])),
             rows[hint_row_idx],
         );
@@ -913,7 +1155,7 @@ pub fn render_broadcast_picker(
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Broadcast — Select Hosts ")
+        .title(format!(" {} ", crate::i18n::tr("broadcast-title")))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -989,21 +1231,30 @@ pub fn render_broadcast_picker(
                     .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":toggle  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("status-toggle")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "Enter",
                 Style::default()
                     .fg(theme.text_success)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":run  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("snippets-run")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "Esc",
                 Style::default()
                     .fg(theme.text_warning)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":cancel", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("common-cancel")),
+                Style::default().fg(theme.text_muted),
+            ),
         ])),
         hint_area,
     );
@@ -1020,7 +1271,11 @@ pub fn render_quick_execute_input(
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(format!(" Quick Execute — {} ", host_name))
+        .title(format!(
+            " {} — {} ",
+            crate::i18n::tr("quick-execute-title"),
+            host_name
+        ))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -1067,14 +1322,20 @@ pub fn render_quick_execute_input(
                     .fg(theme.text_success)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":run  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("snippets-run")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "Esc",
                 Style::default()
                     .fg(theme.text_warning)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":cancel", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("common-cancel")),
+                Style::default().fg(theme.text_muted),
+            ),
         ])),
         rows[1],
     );
@@ -1101,7 +1362,7 @@ pub fn render_snippet_results(
     let spinner = SPINNER_FRAMES[(tick_count as usize / 2) % SPINNER_FRAMES.len()];
 
     let block = Block::default()
-        .title(" Results ")
+        .title(format!(" {} ", crate::i18n::tr("snippets-results")))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -1154,13 +1415,19 @@ fn render_single_result(
 
     let status_span = if entry.pending {
         Span::styled(
-            format!(" {} Running… ", spinner),
+            format!(" {} {} ", spinner, crate::i18n::tr("results-running")),
             Style::default().fg(theme.text_warning),
         )
     } else if entry.output.is_ok() {
-        Span::styled(" ✓ Done ", Style::default().fg(theme.text_success))
+        Span::styled(
+            format!(" ✓ {} ", crate::i18n::tr("results-done")),
+            Style::default().fg(theme.text_success),
+        )
     } else {
-        Span::styled(" ✗ Error ", Style::default().fg(theme.text_error))
+        Span::styled(
+            format!(" ✗ {} ", crate::i18n::tr("status-error")),
+            Style::default().fg(theme.text_error),
+        )
     };
 
     frame.render_widget(
@@ -1181,11 +1448,11 @@ fn render_single_result(
     }
 
     // Body: output text or error message.
-    let text = match &entry.output {
-        Ok(out) if !out.is_empty() => out.as_str(),
-        Ok(_) if entry.pending => "",
-        Ok(_) => "(no output)",
-        Err(err) => err.as_str(),
+    let text: Cow<'_, str> = match &entry.output {
+        Ok(out) if !out.is_empty() => Cow::Borrowed(out.as_str()),
+        Ok(_) if entry.pending => Cow::Borrowed(""),
+        Ok(_) => Cow::Owned(crate::i18n::tr("snippets-no-output")),
+        Err(err) => Cow::Borrowed(err.as_str()),
     };
 
     let text_color = if entry.output.is_err() {
@@ -1213,18 +1480,24 @@ fn render_single_result(
                     .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":scroll  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("status-scroll")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "Esc",
                 Style::default()
                     .fg(theme.text_warning)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":close", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("common-close")),
+                Style::default().fg(theme.text_muted),
+            ),
         ])
     } else {
         Line::from(Span::styled(
-            "  Waiting for result…",
+            format!("  {}", crate::i18n::tr("results-waiting")),
             Style::default().fg(theme.text_muted),
         ))
     };
@@ -1248,6 +1521,19 @@ fn render_single_result(
 // SSH Key Setup popups
 // ---------------------------------------------------------------------------
 
+fn key_setup_step_label(step: omnyssh_core::ssh::key_setup::KeySetupStep) -> String {
+    use omnyssh_core::ssh::key_setup::KeySetupStep;
+    let key = match step {
+        KeySetupStep::GenerateKey => "key-step-generate",
+        KeySetupStep::CopyPublicKey => "key-step-copy",
+        KeySetupStep::VerifyKeyAuth => "key-step-verify",
+        KeySetupStep::DisablePassword => "key-step-disable-password",
+        KeySetupStep::ReloadSshd => "key-step-reload",
+        KeySetupStep::FinalCheck => "key-step-final",
+    };
+    crate::i18n::tr(key)
+}
+
 /// Renders the SSH key setup confirmation dialog.
 ///
 /// Shows host name, warns about the operation (disabling password auth),
@@ -1261,7 +1547,7 @@ pub fn render_key_setup_confirm(
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" SSH Key Setup ")
+        .title(format!(" {} ", crate::i18n::tr("key-setup-title")))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -1292,7 +1578,7 @@ pub fn render_key_setup_confirm(
 
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "  Configure SSH key authentication",
+            format!("  {}", crate::i18n::tr("key-setup-configure")),
             Style::default()
                 .fg(theme.text_primary)
                 .add_modifier(Modifier::BOLD),
@@ -1302,7 +1588,10 @@ pub fn render_key_setup_confirm(
 
     frame.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled("  Host: ", Style::default().fg(theme.text_secondary)),
+            Span::styled(
+                format!("  {}: ", crate::i18n::tr("snippets-host")),
+                Style::default().fg(theme.text_secondary),
+            ),
             Span::styled(
                 format!("{} ({})", host_name, host_addr),
                 Style::default()
@@ -1315,7 +1604,7 @@ pub fn render_key_setup_confirm(
 
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "  This will:",
+            format!("  {}", crate::i18n::tr("key-setup-will")),
             Style::default().fg(theme.text_secondary),
         ))),
         rows[5],
@@ -1323,7 +1612,7 @@ pub fn render_key_setup_confirm(
 
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "  • Generate an Ed25519 key pair",
+            format!("  • {}", crate::i18n::tr("key-setup-generate")),
             Style::default().fg(theme.text_secondary),
         ))),
         rows[6],
@@ -1331,7 +1620,7 @@ pub fn render_key_setup_confirm(
 
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "  • Disable password auth on server (if sudo available)",
+            format!("  • {}", crate::i18n::tr("key-setup-disable-password")),
             Style::default().fg(theme.text_warning),
         ))),
         rows[7],
@@ -1346,14 +1635,20 @@ pub fn render_key_setup_confirm(
                     .fg(theme.text_success)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":confirm  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("common-confirm")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "n / Esc",
                 Style::default()
                     .fg(theme.text_warning)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":cancel", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("common-cancel")),
+                Style::default().fg(theme.text_muted),
+            ),
         ])),
         rows[9],
     );
@@ -1377,7 +1672,11 @@ pub fn render_key_setup_progress(
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(format!(" Key Setup — {} ", host_name))
+        .title(format!(
+            " {} — {} ",
+            crate::i18n::tr("key-setup-title"),
+            host_name
+        ))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -1409,7 +1708,7 @@ pub fn render_key_setup_progress(
     // Header
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "  Setting up SSH key authentication…",
+            format!("  {}", crate::i18n::tr("key-setup-working")),
             Style::default()
                 .fg(theme.text_primary)
                 .add_modifier(Modifier::BOLD),
@@ -1468,7 +1767,7 @@ pub fn render_key_setup_progress(
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(icon, icon_style),
-                Span::styled(step.description(), desc_style),
+                Span::styled(key_setup_step_label(*step), desc_style),
             ])),
             row,
         );
@@ -1486,14 +1785,17 @@ pub fn render_key_setup_progress(
                         .fg(theme.text_warning)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(":close", Style::default().fg(theme.text_muted)),
+                Span::styled(
+                    format!(":{}", crate::i18n::tr("common-close")),
+                    Style::default().fg(theme.text_muted),
+                ),
             ])),
             hint_row,
         );
     } else {
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
-                "  Please wait…",
+                format!("  {}", crate::i18n::tr("update-wait")),
                 Style::default()
                     .fg(theme.text_muted)
                     .add_modifier(Modifier::ITALIC),
@@ -1508,12 +1810,12 @@ pub fn render_key_setup_progress(
 // ---------------------------------------------------------------------------
 
 /// Label shown on an update-popup button.
-fn update_button_label(button: UpdateButton, can_self_update: bool) -> &'static str {
+fn update_button_label(button: UpdateButton, can_self_update: bool) -> String {
     match button {
-        UpdateButton::Primary if can_self_update => "Update now",
-        UpdateButton::Primary => "Remind me later",
-        UpdateButton::Skip => "Skip this version",
-        UpdateButton::Disable => "Don't check again",
+        UpdateButton::Primary if can_self_update => crate::i18n::tr("update-install"),
+        UpdateButton::Primary => crate::i18n::tr("update-later"),
+        UpdateButton::Skip => crate::i18n::tr("update-skip"),
+        UpdateButton::Disable => crate::i18n::tr("update-disable"),
     }
 }
 
@@ -1523,7 +1825,7 @@ pub fn render_update(frame: &mut Frame, popup: &UpdatePopup, theme: &Theme) {
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Update Available ")
+        .title(format!(" {} ", crate::i18n::tr("update-title")))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -1546,7 +1848,10 @@ pub fn render_update(frame: &mut Frame, popup: &UpdatePopup, theme: &Theme) {
     let mut lines: Vec<Line> = vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Version  ", Style::default().fg(theme.text_secondary)),
+            Span::styled(
+                format!("  {}  ", crate::i18n::tr("update-version")),
+                Style::default().fg(theme.text_secondary),
+            ),
             Span::styled(
                 popup.info.current.clone(),
                 Style::default().fg(theme.text_muted),
@@ -1571,16 +1876,16 @@ pub fn render_update(frame: &mut Frame, popup: &UpdatePopup, theme: &Theme) {
         UpdatePopupPhase::Prompt { .. } => {
             if popup.info.can_self_update {
                 lines.push(Line::from(Span::styled(
-                    "  This update can be downloaded and installed now.",
+                    format!("  {}", crate::i18n::tr("update-self-install")),
                     info_style,
                 )));
                 lines.push(Line::from(Span::styled(
-                    "  The archive checksum is verified before installing.",
+                    format!("  {}", crate::i18n::tr("update-checksum")),
                     Style::default().fg(theme.text_muted),
                 )));
             } else if let Some(cmd) = popup.info.method.upgrade_command() {
                 lines.push(Line::from(Span::styled(
-                    "  Update it with your package manager:",
+                    format!("  {}", crate::i18n::tr("update-package-manager")),
                     info_style,
                 )));
                 lines.push(Line::from(""));
@@ -1590,7 +1895,7 @@ pub fn render_update(frame: &mut Frame, popup: &UpdatePopup, theme: &Theme) {
                 )));
             } else {
                 lines.push(Line::from(Span::styled(
-                    "  Download the new release from:",
+                    format!("  {}", crate::i18n::tr("update-download-from")),
                     info_style,
                 )));
                 lines.push(Line::from(""));
@@ -1603,7 +1908,7 @@ pub fn render_update(frame: &mut Frame, popup: &UpdatePopup, theme: &Theme) {
         UpdatePopupPhase::Installing => {
             let spinner = SPINNER_FRAMES[(frame.count() / 2) % SPINNER_FRAMES.len()];
             lines.push(Line::from(Span::styled(
-                format!("  {spinner} Downloading and installing — please wait…"),
+                format!("  {spinner} {}", crate::i18n::tr("update-installing")),
                 Style::default().fg(theme.text_warning),
             )));
         }
@@ -1652,24 +1957,33 @@ pub fn render_update(frame: &mut Frame, popup: &UpdatePopup, theme: &Theme) {
                     .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":select  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("common-select")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "Enter",
                 Style::default()
                     .fg(theme.text_success)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":confirm  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("common-confirm")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "Esc",
                 Style::default()
                     .fg(theme.text_warning)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":dismiss", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("update-dismiss")),
+                Style::default().fg(theme.text_muted),
+            ),
         ]),
         UpdatePopupPhase::Installing => Line::from(Span::styled(
-            "  Please wait…",
+            format!("  {}", crate::i18n::tr("update-wait")),
             Style::default()
                 .fg(theme.text_muted)
                 .add_modifier(Modifier::ITALIC),
@@ -1681,7 +1995,10 @@ pub fn render_update(frame: &mut Frame, popup: &UpdatePopup, theme: &Theme) {
                     .fg(theme.text_warning)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":close", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("common-close")),
+                Style::default().fg(theme.text_muted),
+            ),
         ]),
     };
     frame.render_widget(Paragraph::new(hint), rows[2]);

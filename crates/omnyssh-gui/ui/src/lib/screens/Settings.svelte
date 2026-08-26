@@ -8,10 +8,16 @@
   import { Surface, Icon } from '$lib/theme';
   import { theme } from '$lib/stores/theme';
   import { streamerMode } from '$lib/stores/streamer';
-  import { refreshInterval, REFRESH_OPTIONS } from '$lib/stores/settings';
+  import {
+    refreshInterval,
+    terminalOpenMode,
+    REFRESH_OPTIONS,
+    type TerminalOpenMode
+  } from '$lib/stores/settings';
   import { offerUpdate } from '$lib/stores/update';
   import { lastError } from '$lib/stores/notifications';
   import { checkUpdate, loadUpdateConfig, saveUpdateConfig } from '$lib/ipc/commands';
+  import { language, languagePreference, t, type LanguagePreference } from '$lib/i18n';
 
   const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
   const formatInterval = (secs: number): string => (secs < 60 ? `${secs}s` : `${secs / 60}m`);
@@ -68,6 +74,14 @@
     }
   }
 
+  async function selectTerminalMode(mode: TerminalOpenMode): Promise<void> {
+    try {
+      await terminalOpenMode.set(mode);
+    } catch (e) {
+      lastError.set(message(e));
+    }
+  }
+
   const seg =
     'rounded-lg px-3 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus';
   const segState = (active: boolean): string =>
@@ -75,16 +89,16 @@
 </script>
 
 <section class="mx-auto h-full max-w-2xl p-6">
-  <h1 class="mb-5 text-lg font-semibold tracking-tight">Settings</h1>
+  <h1 class="mb-5 text-lg font-semibold tracking-tight">{$t('settings-title')}</h1>
 
   <div class="space-y-4">
     <!-- Appearance -->
     <Surface class="p-5">
-      <h2 class="mb-3 text-sm font-semibold">Appearance</h2>
+      <h2 class="mb-3 text-sm font-semibold">{$t('settings-appearance')}</h2>
       <div class="flex items-center justify-between gap-4">
         <div>
-          <p class="text-sm">Theme</p>
-          <p class="text-xs text-muted">Mirrors the sidebar toggle.</p>
+          <p class="text-sm">{$t('settings-theme')}</p>
+          <p class="text-xs text-muted">{$t('settings-theme-description')}</p>
         </div>
         <div class="flex gap-1 rounded-xl bg-surface-inset p-1">
           <button
@@ -93,7 +107,7 @@
             aria-pressed={$theme === 'light'}
             onclick={() => theme.set('light')}
           >
-            <span class="flex items-center gap-1.5"><Icon name="sun" size={14} /> Light</span>
+            <span class="flex items-center gap-1.5"><Icon name="sun" size={14} /> {$t('settings-theme-light')}</span>
           </button>
           <button
             type="button"
@@ -101,27 +115,75 @@
             aria-pressed={$theme === 'dark'}
             onclick={() => theme.set('dark')}
           >
-            <span class="flex items-center gap-1.5"><Icon name="moon" size={14} /> Dark</span>
+            <span class="flex items-center gap-1.5"><Icon name="moon" size={14} /> {$t('settings-theme-dark')}</span>
           </button>
+        </div>
+      </div>
+      <div class="mt-4 flex items-center justify-between gap-4 border-t border-default pt-4">
+        <div>
+          <p class="text-sm">{$t('settings-language')}</p>
+          <p class="text-xs text-muted">{$t('settings-language-description')}</p>
+        </div>
+        <div class="flex flex-wrap justify-end gap-1 rounded-xl bg-surface-inset p-1">
+          {#each [
+            ['system', 'settings-language-system'],
+            ['en-US', 'settings-language-english'],
+            ['zh-CN', 'settings-language-chinese']
+          ] as option (option[0])}
+            <button
+              type="button"
+              class="{seg} {segState($languagePreference === option[0])}"
+              aria-pressed={$languagePreference === option[0]}
+              onclick={() => language.set(option[0] as LanguagePreference)}
+            >
+              {$t(option[1])}
+            </button>
+          {/each}
+        </div>
+      </div>
+    </Surface>
+
+    <!-- Terminal -->
+    <Surface class="p-5">
+      <h2 class="mb-3 text-sm font-semibold">{$t('settings-terminal')}</h2>
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm">{$t('settings-terminal-open-mode')}</p>
+          <p class="text-xs text-muted">{$t('settings-terminal-open-description')}</p>
+        </div>
+        <div class="flex shrink-0 gap-1 rounded-xl bg-surface-inset p-1">
+          {#each [
+            ['default', 'settings-terminal-default'],
+            ['system', 'settings-terminal-system']
+          ] as option (option[0])}
+            <button
+              type="button"
+              class="{seg} {segState($terminalOpenMode === option[0])}"
+              aria-pressed={$terminalOpenMode === option[0]}
+              onclick={() => void selectTerminalMode(option[0] as TerminalOpenMode)}
+            >
+              {$t(option[1])}
+            </button>
+          {/each}
         </div>
       </div>
     </Surface>
 
     <!-- Privacy -->
     <Surface class="p-5">
-      <h2 class="mb-3 text-sm font-semibold">Privacy</h2>
+      <h2 class="mb-3 text-sm font-semibold">{$t('settings-privacy')}</h2>
       <div class="flex items-center justify-between gap-4">
         <div class="min-w-0">
-          <p class="text-sm">Streamer mode</p>
+          <p class="text-sm">{$t('settings-streamer-mode')}</p>
           <p class="text-xs text-muted">
-            Mask host addresses with realistic fakes, so real IPs stay off-screen while recording.
+            {$t('settings-streamer-description')}
           </p>
         </div>
         <button
           type="button"
           role="switch"
           aria-checked={$streamerMode}
-          aria-label="Streamer mode"
+          aria-label={$t('settings-streamer-mode')}
           onclick={() => streamerMode.toggle()}
           class="relative h-6 w-11 shrink-0 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus {$streamerMode
             ? 'bg-accent'
@@ -138,11 +200,11 @@
 
     <!-- Dashboard -->
     <Surface class="p-5">
-      <h2 class="mb-3 text-sm font-semibold">Dashboard</h2>
+      <h2 class="mb-3 text-sm font-semibold">{$t('settings-dashboard')}</h2>
       <div class="flex items-center justify-between gap-4">
         <div>
-          <p class="text-sm">Auto-refresh interval</p>
-          <p class="text-xs text-muted">How often the dashboard forces a metric refresh.</p>
+          <p class="text-sm">{$t('settings-refresh-interval')}</p>
+          <p class="text-xs text-muted">{$t('settings-refresh-description')}</p>
         </div>
         <div class="flex flex-wrap justify-end gap-1 rounded-xl bg-surface-inset p-1">
           {#each REFRESH_OPTIONS as secs (secs)}
@@ -161,18 +223,18 @@
 
     <!-- Updates -->
     <Surface class="p-5">
-      <h2 class="mb-3 text-sm font-semibold">Updates</h2>
+      <h2 class="mb-3 text-sm font-semibold">{$t('settings-updates')}</h2>
       <div class="space-y-4">
         <div class="flex items-center justify-between gap-4">
           <div>
-            <p class="text-sm">Check for updates on startup</p>
-            <p class="text-xs text-muted">Look for a newer release when the app launches.</p>
+            <p class="text-sm">{$t('settings-check-startup')}</p>
+            <p class="text-xs text-muted">{$t('settings-check-startup-description')}</p>
           </div>
           <button
             type="button"
             role="switch"
             aria-checked={updateConfig?.checkOnStartup ?? false}
-            aria-label="Check for updates on startup"
+            aria-label={$t('settings-check-startup')}
             disabled={!updateConfig}
             onclick={toggleCheckOnStartup}
             class="relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus {updateConfig?.checkOnStartup
@@ -189,13 +251,13 @@
 
         <div class="flex items-center justify-between gap-4 border-t border-default pt-4">
           <div class="min-w-0">
-            <p class="text-sm">Manual check</p>
+            <p class="text-sm">{$t('settings-manual-check')}</p>
             <p class="text-xs text-muted">
-              {#if check.kind === 'checking'}Checking…
-              {:else if check.kind === 'upToDate'}You're on the latest version.
-              {:else if check.kind === 'available'}Version {check.version} is available.
+              {#if check.kind === 'checking'}{$t('settings-checking')}
+              {:else if check.kind === 'upToDate'}{$t('settings-up-to-date')}
+              {:else if check.kind === 'available'}{$t('settings-update-available', { version: check.version })}
               {:else if check.kind === 'error'}{check.message}
-              {:else}Check GitHub for a newer release.
+              {:else}{$t('settings-manual-description')}
               {/if}
             </p>
           </div>
@@ -206,7 +268,7 @@
             onclick={checkNow}
           >
             <Icon name="refresh" size={14} />
-            Check now
+            {$t('settings-check-now')}
           </button>
         </div>
       </div>

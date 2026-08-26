@@ -53,18 +53,21 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
     if hlv.search_mode {
         let line = Line::from(vec![
             Span::styled(
-                " [SEARCH] ",
+                format!(" [{}] ", crate::i18n::tr("status-search")),
                 Style::default()
                     .fg(Color::Black)
                     .bg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" type to filter  ", Style::default().fg(Color::Gray)),
+            Span::styled(
+                format!(" {}  ", crate::i18n::tr("status-type-filter")),
+                Style::default().fg(Color::Gray),
+            ),
             key!("Enter"),
-            hint!("confirm"),
+            hint!(crate::i18n::tr("common-confirm")),
             sep!(),
             key!("Esc"),
-            hint!("clear"),
+            hint!(crate::i18n::tr("status-clear")),
         ]);
         frame.render_widget(
             Paragraph::new(line).style(Style::default().bg(Color::Reset)),
@@ -79,36 +82,39 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
         let line = match popup {
             HostPopup::Add(_) | HostPopup::Edit { .. } => Line::from(vec![
                 key!("Tab"),
-                hint!("next field"),
+                hint!(crate::i18n::tr("status-next-field")),
                 sep!(),
                 key!("Shift+Tab"),
-                hint!("prev field"),
+                hint!(crate::i18n::tr("status-prev-field")),
                 sep!(),
                 key!("Enter"),
-                hint!("save"),
+                hint!(crate::i18n::tr("common-save")),
                 sep!(),
                 key!("Esc"),
-                hint!("cancel"),
+                hint!(crate::i18n::tr("common-cancel")),
             ]),
             HostPopup::DeleteConfirm(_) => Line::from(vec![
                 key!("y"),
-                hint!("confirm delete"),
+                hint!(crate::i18n::tr("status-confirm-delete")),
                 sep!(),
                 key!("n / Esc"),
-                hint!("cancel"),
+                hint!(crate::i18n::tr("common-cancel")),
             ]),
             HostPopup::KeySetupConfirm(_) => Line::from(vec![
                 key!("y / Enter"),
-                hint!("confirm setup"),
+                hint!(crate::i18n::tr("status-confirm-setup")),
                 sep!(),
                 key!("n / Esc"),
-                hint!("cancel"),
+                hint!(crate::i18n::tr("common-cancel")),
             ]),
             HostPopup::KeySetupProgress { .. } => Line::from(vec![
-                Span::styled(" Setting up SSH keys… ", hint_style),
+                Span::styled(
+                    format!(" {} ", crate::i18n::tr("status-key-setup")),
+                    hint_style,
+                ),
                 sep!(),
                 key!("Esc"),
-                hint!("close"),
+                hint!(crate::i18n::tr("common-close")),
             ]),
         };
         frame.render_widget(
@@ -122,18 +128,21 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
     if view.snippets_view.search_mode {
         let line = Line::from(vec![
             Span::styled(
-                " [SEARCH] ",
+                format!(" [{}] ", crate::i18n::tr("status-search")),
                 Style::default()
                     .fg(Color::Black)
                     .bg(Color::Green)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" type to filter  ", Style::default().fg(Color::Gray)),
+            Span::styled(
+                format!(" {}  ", crate::i18n::tr("status-type-filter")),
+                Style::default().fg(Color::Gray),
+            ),
             key!("Enter"),
-            hint!("confirm"),
+            hint!(crate::i18n::tr("common-confirm")),
             sep!(),
             key!("Esc"),
-            hint!("clear"),
+            hint!(crate::i18n::tr("status-clear")),
         ]);
         frame.render_widget(
             Paragraph::new(line).style(Style::default().bg(Color::Reset)),
@@ -147,60 +156,60 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
         let line = match popup {
             SnippetPopup::Add(_) | SnippetPopup::Edit { .. } => Line::from(vec![
                 key!("Tab"),
-                hint!("next field"),
+                hint!(crate::i18n::tr("status-next-field")),
                 sep!(),
                 key!("Shift+Tab"),
-                hint!("prev field"),
+                hint!(crate::i18n::tr("status-prev-field")),
                 sep!(),
                 key!("Enter"),
-                hint!("save"),
+                hint!(crate::i18n::tr("common-save")),
                 sep!(),
                 key!("Esc"),
-                hint!("cancel"),
+                hint!(crate::i18n::tr("common-cancel")),
             ]),
             SnippetPopup::DeleteConfirm(_) => Line::from(vec![
                 key!("y"),
-                hint!("confirm delete"),
+                hint!(crate::i18n::tr("status-confirm-delete")),
                 sep!(),
                 key!("n / Esc"),
-                hint!("cancel"),
+                hint!(crate::i18n::tr("common-cancel")),
             ]),
             SnippetPopup::ParamInput { .. } => Line::from(vec![
                 key!("Tab"),
-                hint!("next param"),
+                hint!(crate::i18n::tr("status-next-param")),
                 sep!(),
                 key!("Enter"),
-                hint!("run"),
+                hint!(crate::i18n::tr("snippets-run")),
                 sep!(),
                 key!("Esc"),
-                hint!("cancel"),
+                hint!(crate::i18n::tr("common-cancel")),
             ]),
             SnippetPopup::BroadcastPicker { .. } => Line::from(vec![
                 key!("j/k"),
-                hint!("navigate"),
+                hint!(crate::i18n::tr("status-navigate")),
                 sep!(),
                 key!("Space"),
-                hint!("toggle"),
+                hint!(crate::i18n::tr("status-toggle")),
                 sep!(),
                 key!("Enter"),
-                hint!("run"),
+                hint!(crate::i18n::tr("snippets-run")),
                 sep!(),
                 key!("Esc"),
-                hint!("cancel"),
+                hint!(crate::i18n::tr("common-cancel")),
             ]),
             SnippetPopup::QuickExecuteInput { .. } => Line::from(vec![
                 key!("Enter"),
-                hint!("run"),
+                hint!(crate::i18n::tr("snippets-run")),
                 sep!(),
                 key!("Esc"),
-                hint!("cancel"),
+                hint!(crate::i18n::tr("common-cancel")),
             ]),
             SnippetPopup::Results { .. } => Line::from(vec![
                 key!("j/k"),
-                hint!("scroll"),
+                hint!(crate::i18n::tr("status-scroll")),
                 sep!(),
                 key!("Esc"),
-                hint!("close"),
+                hint!(crate::i18n::tr("common-close")),
             ]),
         };
         frame.render_widget(
@@ -216,27 +225,27 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
             let line = match fm_popup {
                 FileManagerPopup::HostPicker { .. } => Line::from(vec![
                     key!("j/k"),
-                    hint!("navigate"),
+                    hint!(crate::i18n::tr("status-navigate")),
                     sep!(),
                     key!("Enter"),
-                    hint!("connect"),
+                    hint!(crate::i18n::tr("common-connect")),
                     sep!(),
                     key!("Esc"),
-                    hint!("cancel"),
+                    hint!(crate::i18n::tr("common-cancel")),
                 ]),
                 FileManagerPopup::DeleteConfirm { .. } => Line::from(vec![
                     key!("y"),
-                    hint!("confirm delete"),
+                    hint!(crate::i18n::tr("status-confirm-delete")),
                     sep!(),
                     key!("n / Esc"),
-                    hint!("cancel"),
+                    hint!(crate::i18n::tr("common-cancel")),
                 ]),
                 FileManagerPopup::MkDir(_) | FileManagerPopup::Rename { .. } => Line::from(vec![
                     key!("Enter"),
-                    hint!("confirm"),
+                    hint!(crate::i18n::tr("common-confirm")),
                     sep!(),
                     key!("Esc"),
-                    hint!("cancel"),
+                    hint!(crate::i18n::tr("common-cancel")),
                 ]),
                 FileManagerPopup::TransferProgress {
                     filename,
@@ -250,7 +259,10 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
                         0
                     };
                     Line::from(vec![Span::styled(
-                        format!(" Transferring: {}  {}% ", filename, pct),
+                        crate::i18n::tr_args(
+                            "status-transferring",
+                            &[("filename", filename.clone()), ("percent", pct.to_string())],
+                        ),
                         hint_style,
                     )])
                 }
@@ -267,13 +279,13 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
     if hlv.tag_popup_open {
         let line = Line::from(vec![
             key!("j/k"),
-            hint!("navigate"),
+            hint!(crate::i18n::tr("status-navigate")),
             sep!(),
             key!("Enter"),
-            hint!("select"),
+            hint!(crate::i18n::tr("common-select")),
             sep!(),
             key!("Esc"),
-            hint!("close"),
+            hint!(crate::i18n::tr("common-close")),
         ]);
         frame.render_widget(
             Paragraph::new(line).style(Style::default().bg(Color::Reset)),
@@ -285,22 +297,22 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
     // Global hints only - screen-specific hints are now in page headers.
     let spans = vec![
         key!("1"),
-        hint!("Dashboard"),
+        hint!(crate::i18n::tr("screen-dashboard")),
         sep!(),
         key!("2"),
-        hint!("Files"),
+        hint!(crate::i18n::tr("screen-files")),
         sep!(),
         key!("3"),
-        hint!("Snippets"),
+        hint!(crate::i18n::tr("screen-snippets")),
         sep!(),
         key!("4"),
-        hint!("Terminal"),
+        hint!(crate::i18n::tr("screen-terminal")),
         sep!(),
         key!("?"),
-        hint!("Help"),
+        hint!(crate::i18n::tr("help-title")),
         sep!(),
         key!("q"),
-        hint!("Quit"),
+        hint!(crate::i18n::tr("status-quit")),
     ];
 
     frame.render_widget(

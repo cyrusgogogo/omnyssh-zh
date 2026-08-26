@@ -7,6 +7,32 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## 1.0.0 — 2026-08-26 (Chinese-optimized edition)
+
+This is the first release of the independently maintained Chinese-optimized edition based on upstream OmnySSH. See [NOTICE](NOTICE) for attribution and modification details.
+
+### Features
+- **The desktop app can safely manage user-level OpenSSH configuration.** A new SSH Config screen keeps OmnySSH-owned exact-host blocks in `~/.ssh/omnyssh.conf` and installs a single top-level Include only after a diff preview. These entries stay independent from the app's own `hosts.toml` hosts. Existing user config and included files remain read-only. Strict validation, optimistic concurrency checks, a cross-process lock, atomic replacement, timestamped backups, and rollback protect the files; TUI behaviour remains read-only.
+- **The SSH Config screen now manages key pairs under `~/.ssh`.** It can create Ed25519 or RSA-4096 pairs with the system `ssh-keygen`, load existing pairs, rename only their OmnySSH display records, copy public/private paths, and back up, restore, or delete a pair after typed-name confirmation. Private-key contents never cross the desktop IPC boundary, paths outside `~/.ssh` and symlinks are rejected, and destructive deletion always creates a restorable backup first. IdentityFile fields now select from managed keys while preserving an existing unmanaged path.
+- **The desktop app can remain in the system tray.** Closing the main window hides it; clicking the tray icon or Show restores it, and Quit in the tray menu performs the explicit full exit.
+- **Terminal actions can open in the operating system's terminal.** Settings offers the existing embedded terminal or Windows Terminal, macOS Terminal, and the Linux system terminal. Imported SSH-config hosts launch by alias so their full OpenSSH policy is retained, while OmnySSH hosts pass their address, port, identity, jump-host and cipher options without exposing saved passwords.
+- **Dashboard hosts can be kept in a compact desktop card.** Add one or more hosts from the overview, drag the independent card anywhere, and choose whether it stays above other windows. It shows one live host card at a time, switches directly through top-mounted dots coloured by each host's dashboard status, and remembers the selected hosts across launches.
+- **The desktop and terminal apps now support Simplified Chinese.** New installs follow the operating-system language, while existing installs remain in English until changed. The desktop selector lives under Settings → Appearance; the TUI uses `Shift+L`, `[ui].language`, or the session-only `--language` option. SSH terminal output, command results, host names, and paths remain untouched.
+- **Connection aliases can be hidden from the overview.** This is useful when a single machine has separate LAN and public addresses. Hidden hosts remain available to Terminal, SFTP, snippets, and the command palette; the overview can temporarily reveal them for editing. The TUI uses `Shift+H` to reveal hidden hosts.
+
+### Bug Fixes
+- **The desktop card now has working native pin feedback and direct connection actions.** Its pin button reflects the window manager's actual always-on-top state instead of changing only a subtle icon colour. Terminal and SFTP buttons bring the main window forward and open the selected host there, while the redundant title, source badge, delete shortcut, rectangular native shadow, CSS shadow, and transparent outer gutter have been removed for clean edge-to-edge rounded chrome.
+- **GUI scrollbars now match the application chrome and stay out of the way.** Scroll tracks, arrow buttons and resting thumbs are transparent; a compact semantic-colour thumb appears only while its pane is actively scrolling, then hides again after movement stops. Wheel, touchpad and keyboard scrolling remain native.
+- **The desktop card now opens correctly in development builds and its full header can be dragged.** The secondary window previously requested SvelteKit's nonexistent `/index.html` route, leaving only a 404 page with no drag region. It now targets the app root in both development and packaged builds, and the non-interactive header uses Tauri's deep drag-region mode.
+- **New managed keys get unique filenames and system-terminal tabs identify their host.** The key manager now suggests `id_omnyssh_<random>` instead of reusing one fixed filename. Windows Terminal tabs, macOS Terminal sessions, and Linux system-terminal windows use the OmnySSH host name as their title.
+- **The Chinese SSH Config navigation and host editor are now fully localized.** The navigation label is consistently written as “SSH配置”, and every field in the add/edit dialog uses the active Fluent locale instead of hard-coded English text.
+- **Host-specific OpenSSH `Ciphers` settings now reach native connections.** The SSH-config importer used to discard `Ciphers`, while every metrics, terminal, SFTP and snippet connection used russh's safe default list. A legacy server configured with `Ciphers +aes256-cbc` therefore worked with the system `ssh` command but never connected in OmnySSH. Algorithm-list modifiers are now applied per host (and independently per ProxyJump hop), and the SSH policy is retained when a same-name `hosts.toml` entry supplies OmnySSH-only metadata. CBC remains disabled unless that host explicitly opts in, and unsupported names fail with a precise error.
+- **The SSH Config screen now completes add and delete flows and shows every relevant source.** Saving or deleting a managed host immediately opens the required safety preview instead of leaving an easy-to-miss in-memory draft, and confirming it writes the managed fragment plus the main-file Include. Configuration Sources displays both the user's `~/.ssh/config` and OmnySSH's `~/.ssh/omnyssh.conf`. The redundant `hosts.toml` sync page has been removed, and dashboard cards plus both add-host dialogs now identify whether an entry belongs to OmnySSH or User SSH Config. The managed tab is labelled “User SSH Config”, and its sidebar entry has a dedicated icon instead of reusing Settings.
+- **macOS RAM usage now excludes file-backed cache.** The old `vm_stat` parser counted almost every cached file page as used memory, so a cache-warmed Mac could appear nearly full while Activity Monitor showed much less memory in use. The parser now follows macOS's file-backed-memory accounting and retains a fallback for older `vm_stat` output.
+
+### Documentation
+- Added a complete Simplified Chinese README and localized `man` page. The Unix/Termux installer and Nix package install both English and Chinese manual pages.
+
 ## 1.1.2 — 2026-08-22
 
 ### Features
@@ -177,7 +203,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## 1.0.0 — 2026-04-18
+## 1.0.0 — 2026-04-18 (upstream)
 
 First production-ready release of OmnySSH.
 

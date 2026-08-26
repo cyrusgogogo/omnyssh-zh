@@ -1,6 +1,9 @@
 import { get } from 'svelte/store';
 import { activeEntity } from './activeEntity';
 import { sessions, type Session, type SessionKind } from './sessions';
+import { terminalOpenMode } from './settings';
+import { openSystemTerminal } from '$lib/ipc/commands';
+import { lastError } from './notifications';
 
 // Composed navigation actions that keep the sessions list and the active entity in
 // step (tech-gui.md §2). A spawn appends a session and makes it active (both spawn
@@ -10,6 +13,17 @@ export function spawnSession(kind: SessionKind, hostName: string): Session {
   const session = sessions.spawn(kind, hostName);
   activeEntity.activateSession(session.id);
   return session;
+}
+
+/** Apply the user's terminal-open preference while keeping SFTP inside OmnySSH. */
+export function openHostSession(kind: SessionKind, hostName: string): Session | null {
+  if (kind === 'terminal' && get(terminalOpenMode) === 'system') {
+    void openSystemTerminal(hostName).catch((error) =>
+      lastError.set(error instanceof Error ? error.message : String(error))
+    );
+    return null;
+  }
+  return spawnSession(kind, hostName);
 }
 
 export function closeSession(id: number): void {

@@ -3,6 +3,7 @@ use clap::Parser;
 mod app;
 mod cli;
 mod event;
+mod i18n;
 mod keybindings;
 mod term_input;
 mod ui;
@@ -80,6 +81,21 @@ async fn main() -> anyhow::Result<()> {
                 omnyssh_core::config::app_config::AppConfig::default()
             }
         };
+
+    // `--language` is intentionally session-only; UI selections persist.
+    if let Some(ref language) = cli.language {
+        if language.eq_ignore_ascii_case(omnyssh_core::locale::SYSTEM)
+            || omnyssh_core::locale::normalize_locale(language).is_some()
+        {
+            app_config.ui.language = language.clone();
+        } else {
+            eprintln!(
+                "Warning: Unknown language '{}'; using English for this session.",
+                language
+            );
+            app_config.ui.language = omnyssh_core::locale::EN_US.to_string();
+        }
+    }
 
     // Apply CLI theme override if provided and save it to config.
     if let Some(ref theme) = cli.theme {

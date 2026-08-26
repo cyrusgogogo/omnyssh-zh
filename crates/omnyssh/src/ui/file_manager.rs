@@ -66,8 +66,11 @@ pub fn render(frame: &mut Frame, area: Rect, state: &crate::app::AppState, view:
         fm.local.cwd.clone()
     };
     let remote_title = match &fm.connected_host {
-        Some(h) => format!("REMOTE  {} — {}", h, fm.remote.cwd),
-        None => "REMOTE  (not connected)".to_string(),
+        Some(h) => crate::i18n::tr_args(
+            "files-remote-title",
+            &[("host", h.clone()), ("path", fm.remote.cwd.clone())],
+        ),
+        None => crate::i18n::tr("files-remote-disconnected"),
     };
 
     // Render panels.
@@ -76,7 +79,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &crate::app::AppState, view:
         frame,
         local_area,
         &fm.local,
-        &format!("LOCAL  {local_cwd}"),
+        &crate::i18n::tr_args("files-local-title", &[("path", local_cwd.to_string())]),
         local_active,
         &view.theme,
     );
@@ -166,7 +169,10 @@ fn render_hints_header(frame: &mut Frame, area: Rect, theme: &crate::ui::theme::
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Navigate", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("status-navigate")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             "Tab",
@@ -174,7 +180,10 @@ fn render_hints_header(frame: &mut Frame, area: Rect, theme: &crate::ui::theme::
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Switch", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("files-switch")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             "Space",
@@ -182,7 +191,10 @@ fn render_hints_header(frame: &mut Frame, area: Rect, theme: &crate::ui::theme::
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Mark", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("files-mark")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             "c",
@@ -190,7 +202,10 @@ fn render_hints_header(frame: &mut Frame, area: Rect, theme: &crate::ui::theme::
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Copy", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("files-copy")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             "p",
@@ -198,7 +213,10 @@ fn render_hints_header(frame: &mut Frame, area: Rect, theme: &crate::ui::theme::
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Paste", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("files-paste")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             "n",
@@ -206,7 +224,10 @@ fn render_hints_header(frame: &mut Frame, area: Rect, theme: &crate::ui::theme::
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":MkDir", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("files-new-folder")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             "Shift+R",
@@ -214,7 +235,10 @@ fn render_hints_header(frame: &mut Frame, area: Rect, theme: &crate::ui::theme::
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Rename", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("files-rename")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             "Shift+D",
@@ -222,7 +246,10 @@ fn render_hints_header(frame: &mut Frame, area: Rect, theme: &crate::ui::theme::
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Delete", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("files-delete")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             ".",
@@ -230,7 +257,10 @@ fn render_hints_header(frame: &mut Frame, area: Rect, theme: &crate::ui::theme::
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Hidden", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("files-hidden")),
+            Style::default().fg(theme.text_muted),
+        ),
         Span::raw("  "),
         Span::styled(
             "Shift+H",
@@ -238,7 +268,10 @@ fn render_hints_header(frame: &mut Frame, area: Rect, theme: &crate::ui::theme::
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":Host", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            format!(":{}", crate::i18n::tr("snippets-host")),
+            Style::default().fg(theme.text_muted),
+        ),
     ]);
 
     frame.render_widget(Paragraph::new(hints), area);
@@ -499,9 +532,9 @@ fn render_panel(
     // Empty-panel hint.
     if panel.entries.is_empty() {
         let hint = if panel.cwd.is_empty() {
-            "(loading…)"
+            crate::i18n::tr("common-loading")
         } else {
-            "(empty)"
+            crate::i18n::tr("files-empty")
         };
         frame.render_widget(
             Paragraph::new(Span::styled(
@@ -538,7 +571,7 @@ fn render_preview_zone(
     }
 
     let block = Block::default()
-        .title(" Preview ")
+        .title(format!(" {} ", crate::i18n::tr("files-preview")))
         .title_alignment(Alignment::Left)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -585,7 +618,7 @@ fn render_preview_zone(
     } else {
         frame.render_widget(
             Paragraph::new(Span::styled(
-                "  (no preview — select a text file)",
+                crate::i18n::tr("files-no-preview"),
                 Style::default()
                     .fg(Color::DarkGray)
                     .add_modifier(Modifier::ITALIC),
@@ -604,7 +637,7 @@ fn render_transfer_progress(
     theme: &crate::ui::theme::Theme,
 ) {
     let block = Block::default()
-        .title(" Transfer Progress ")
+        .title(format!(" {} ", crate::i18n::tr("files-transfer")))
         .title_alignment(Alignment::Left)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -652,7 +685,7 @@ fn render_transfer_progress(
             percent
         )
     } else {
-        format!("  {} transferred…", format_size(done))
+        crate::i18n::tr_args("files-transferred", &[("size", format_size(done))])
     };
 
     let gauge = Gauge::default()
@@ -683,13 +716,22 @@ fn render_fm_popup(
             render_fm_delete_confirm(frame, area, paths, theme);
         }
         FileManagerPopup::MkDir(field) => {
-            render_fm_text_input(frame, area, " New Directory ", field, theme);
+            render_fm_text_input(
+                frame,
+                area,
+                &format!(" {} ", crate::i18n::tr("files-new-folder")),
+                field,
+                theme,
+            );
         }
         FileManagerPopup::Rename {
             field,
             original_name,
         } => {
-            let title = format!(" Rename '{}' ", original_name);
+            let title = format!(
+                " {} ",
+                crate::i18n::tr_args("files-rename-name", &[("name", original_name.clone())])
+            );
             render_fm_text_input(frame, area, &title, field, theme);
         }
         FileManagerPopup::TransferProgress { .. } => {
@@ -710,7 +752,7 @@ fn render_fm_host_picker(
     frame.render_widget(Clear, popup_area);
 
     let block = Block::default()
-        .title(" Connect Remote Panel — Select Host ")
+        .title(format!(" {} ", crate::i18n::tr("files-select-host")))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -722,7 +764,7 @@ fn render_fm_host_picker(
     if hosts.is_empty() {
         frame.render_widget(
             Paragraph::new(Span::styled(
-                "  No hosts configured. Add a host from the Dashboard (1).",
+                crate::i18n::tr("files-no-hosts"),
                 Style::default().fg(theme.text_muted),
             )),
             inner,
@@ -783,21 +825,30 @@ fn render_fm_host_picker(
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":navigate  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("status-navigate")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "Enter",
                 Style::default()
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":connect  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("common-connect")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "Esc",
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":cancel", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("common-cancel")),
+                Style::default().fg(theme.text_muted),
+            ),
         ])),
         hint_area,
     );
@@ -860,14 +911,20 @@ fn render_fm_text_input(
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":confirm  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("common-confirm")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "Esc",
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":cancel", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("common-cancel")),
+                Style::default().fg(theme.text_muted),
+            ),
         ])),
         rows[1],
     );
@@ -884,7 +941,10 @@ fn render_fm_delete_confirm(
     frame.render_widget(Clear, popup_area);
 
     let block = Block::default()
-        .title(" Confirm Delete ")
+        .title(format!(
+            " {} ",
+            crate::i18n::tr("files-delete-confirm-title")
+        ))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -900,7 +960,7 @@ fn render_fm_delete_confirm(
     // Build content: up to 5 paths + ellipsis if more.
     let mut lines: Vec<Line> = vec![
         Line::from(Span::styled(
-            "  Delete the following items?",
+            crate::i18n::tr("files-delete-question"),
             Style::default()
                 .fg(Color::White)
                 .add_modifier(Modifier::BOLD),
@@ -921,14 +981,17 @@ fn render_fm_delete_confirm(
     }
     if paths.len() > max_show {
         lines.push(Line::from(Span::styled(
-            format!("    … and {} more", paths.len() - max_show),
+            crate::i18n::tr_args(
+                "files-more-items",
+                &[("count", (paths.len() - max_show).to_string())],
+            ),
             Style::default().fg(theme.text_muted),
         )));
     }
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "  This cannot be undone.",
+        crate::i18n::tr("files-cannot-undo"),
         Style::default().fg(theme.text_muted),
     )));
 
@@ -952,14 +1015,20 @@ fn render_fm_delete_confirm(
                     .fg(theme.text_error)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":Yes — delete  ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}  ", crate::i18n::tr("files-yes-delete")),
+                Style::default().fg(theme.text_muted),
+            ),
             Span::styled(
                 "n / Esc",
                 Style::default()
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":No", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                format!(":{}", crate::i18n::tr("common-no")),
+                Style::default().fg(theme.text_muted),
+            ),
         ])),
         hint_row,
     );

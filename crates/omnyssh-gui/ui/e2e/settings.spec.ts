@@ -11,7 +11,7 @@ const HOSTS = [
 
 const UPDATE = {
   version: '2.0.0',
-  url: 'https://github.com/timhartmann7/omnyssh/releases/tag/v2.0.0',
+  url: 'https://github.com/cyrusgogogo/omnyssh/releases/tag/v2.0.0',
   tag: 'v2.0.0',
   canSelfUpdate: true
 };
@@ -23,7 +23,8 @@ async function boot(page: Page, opts: { fireUpdateOnBoot: boolean }): Promise<vo
       const listeners: Record<string, number[]> = {};
       const state = {
         hosts: hosts.map((h) => ({ ...h })),
-        updateConfig: { checkOnStartup: true, skipVersion: '' } as Record<string, unknown>
+        updateConfig: { checkOnStartup: true, skipVersion: '' } as Record<string, unknown>,
+        terminalMode: 'default'
       };
       const win = window as unknown as Record<string, unknown>;
 
@@ -49,6 +50,15 @@ async function boot(page: Page, opts: { fireUpdateOnBoot: boolean }): Promise<vo
               return Promise.resolve(null);
             case 'load_update_config':
               return Promise.resolve({ ...state.updateConfig });
+            case 'load_terminal_open_mode':
+              return Promise.resolve(state.terminalMode);
+            case 'save_terminal_open_mode':
+              state.terminalMode = String(args.mode);
+              win.__savedTerminalMode = state.terminalMode;
+              return Promise.resolve(null);
+            case 'open_system_terminal':
+              win.__openedSystemTerminal = args.hostName;
+              return Promise.resolve(null);
             case 'save_update_config':
               state.updateConfig = { ...(args.config as Record<string, unknown>) };
               win.__savedUpdateConfig = { ...(args.config as Record<string, unknown>) };
@@ -90,6 +100,15 @@ test('the footer gear opens Settings; theme, interval, and update prefs work', a
   await page.getByRole('button', { name: 'Dark', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
+  const systemTerminal = page.getByRole('button', { name: 'System terminal', exact: true });
+  await systemTerminal.click();
+  await expect(systemTerminal).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __savedTerminalMode?: string }).__savedTerminalMode)).toBe('system');
+  await page.getByRole('button', { name: 'Dashboard' }).click();
+  await page.getByRole('button', { name: 'sh', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __openedSystemTerminal?: string }).__openedSystemTerminal)).toBe('web-1');
+  await page.getByRole('button', { name: 'Settings' }).click();
+
   // Auto-refresh interval is a segmented pref.
   const tenSec = page.getByRole('button', { name: '10s', exact: true });
   await tenSec.click();
@@ -104,13 +123,13 @@ test('the footer gear opens Settings; theme, interval, and update prefs work', a
   // A manual check surfaces the available version and raises the banner.
   await page.getByRole('button', { name: 'Check now' }).click();
   await expect(page.getByText('Version 2.0.0 is available.')).toBeVisible();
-  await expect(page.getByText('Update available — v2.0.0')).toBeVisible();
+  await expect(page.getByText('OmnySSH 2.0.0 is available.')).toBeVisible();
 });
 
 test('startup update-available raises the banner; dismiss hides it', async ({ page }) => {
   await boot(page, { fireUpdateOnBoot: true });
 
-  const banner = page.getByText('Update available — v2.0.0');
+  const banner = page.getByText('OmnySSH 2.0.0 is available.');
   await expect(banner).toBeVisible();
 
   await page.getByRole('button', { name: 'Dismiss update notice' }).click();
@@ -125,8 +144,8 @@ test('a settings toggle preserves a skipVersion the banner wrote out-of-band', a
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
   // Now Skip on the banner: it writes skipVersion='2.0.0' to the shared config.
-  await page.getByRole('button', { name: 'Skip', exact: true }).click();
-  await expect(page.getByText('Update available — v2.0.0')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Skip this version', exact: true }).click();
+  await expect(page.getByText('OmnySSH 2.0.0 is available.')).toHaveCount(0);
 
   // Flipping check-on-startup must read-modify-write fresh, not clobber the skip.
   const startupSwitch = page.getByRole('switch', { name: 'Check for updates on startup' });

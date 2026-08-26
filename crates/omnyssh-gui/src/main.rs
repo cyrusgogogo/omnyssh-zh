@@ -13,18 +13,32 @@ mod error;
 mod events;
 mod state;
 
+use commands::desktop_card::{
+    close_desktop_card, open_desktop_card_host, set_desktop_card_always_on_top, show_desktop_card,
+};
 use commands::hosts::{delete_host, list_hosts, refresh_metrics, reload_hosts, save_host};
 use commands::keysetup::start_key_setup;
+use commands::settings::{load_terminal_open_mode, open_system_terminal, save_terminal_open_mode};
 use commands::sftp::{
     list_local_dir, preview_local_file, sftp_close, sftp_delete, sftp_download, sftp_list,
     sftp_mkdir, sftp_open, sftp_preview, sftp_rename, sftp_upload,
 };
 use commands::snippets::{delete_snippet, execute_snippet, list_snippets, save_snippet};
+use commands::ssh_config::{
+    apply_ssh_config, get_ssh_config_snapshot, preview_ssh_config, preview_ssh_config_restore,
+    restore_ssh_config,
+};
+use commands::ssh_keys::{
+    backup_ssh_key, create_ssh_key, delete_ssh_key, get_ssh_key_snapshot, import_ssh_key,
+    read_ssh_public_key, rename_ssh_key, restore_ssh_key,
+};
 use commands::terminal::{terminal_close, terminal_open, terminal_resize, terminal_write};
 use commands::update::{check_update, install_update, load_update_config, save_update_config};
 use omnyssh_core::event::{CoreEvent, SessionId};
 use omnyssh_core::ssh::pty::PtyManager;
 use state::GuiState;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::webview::PageLoadEvent;
 use tauri::Manager;
 use tauri_plugin_window_state::StateFlags;
@@ -34,13 +48,14 @@ use tauri_specta::{collect_commands, collect_events, Builder};
 const BINDINGS_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/ui/src/lib/bindings.ts");
 
 /// How long the hidden window may wait for the page before it is revealed anyway.
-/// The app has no tray icon, so a frontend that never loads must not leave a
-/// running process the user cannot see or reach.
 const REVEAL_FALLBACK: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// Set once the document is up. `is_visible()` stops answering that question the moment
 /// the fallback reveals the window, so the render check reads this instead.
 static PAGE_LOADED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Close requests hide the main window unless the tray's explicit Quit action is active.
+static EXIT_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// A page still missing this long into a launch is a broken graphics stack, not a slow
 /// disk. Deliberately far past `REVEAL_FALLBACK`: that one only reveals a window, this
@@ -71,14 +86,79 @@ const RETRY_MARKER: &str = "OMNYSSH_SOFTWARE_RENDER_RETRY";
 /// maximised. Such a window reopens at its own size in the corner of the display.
 const WINDOW_STATE_FLAGS: StateFlags = StateFlags::SIZE.union(StateFlags::POSITION);
 
-// The reveal is the only path to a visible window — the app has no tray icon — so the
-// exclusions above are too load-bearing to live in prose alone.
+// The initial reveal excludes state-plugin visibility; later tray restores are explicit.
 const _: () = assert!(!WINDOW_STATE_FLAGS.intersects(
     StateFlags::VISIBLE
         .union(StateFlags::MAXIMIZED)
         .union(StateFlags::FULLSCREEN)
         .union(StateFlags::DECORATIONS)
 ));
+
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+fn should_hide_on_close(window_label: &str, exit_requested: bool) -> bool {
+    window_label == "main" && !exit_requested
+}
+
+fn should_prevent_app_exit(exit_requested: bool) -> bool {
+    !exit_requested
+}
+
+fn install_tray(app: &tauri::App) -> tauri::Result<()> {
+    let preference = omnyssh_core::config::app_config::load_app_config(None)
+        .map(|config| config.ui.language)
+        .unwrap_or_else(|_| omnyssh_core::locale::SYSTEM.to_string());
+    let system_locale = sys_locale::get_locale();
+    let chinese = omnyssh_core::locale::resolve_locale(&preference, system_locale.as_deref())
+        == omnyssh_core::locale::ZH_CN;
+    let (show_label, quit_label) = if chinese {
+        ("显示 OmnySSH", "退出 OmnySSH")
+    } else {
+        ("Show OmnySSH", "Quit OmnySSH")
+    };
+
+    let show = MenuItem::with_id(app, "tray-show", show_label, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "tray-quit", quit_label, true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let mut tray = TrayIconBuilder::with_id("main-tray")
+        .menu(&menu)
+        .tooltip("OmnySSH")
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "tray-show" => show_main_window(app),
+            "tray-quit" => {
+                EXIT_REQUESTED.store(true, std::sync::atomic::Ordering::Release);
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if matches!(
+                event,
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } | TrayIconEvent::DoubleClick {
+                    button: MouseButton::Left,
+                    ..
+                }
+            ) {
+                show_main_window(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
+}
 
 /// The single definition of the IPC surface. Shared by `main` (dev export +
 /// wiring) and the drift test so they can never disagree.
@@ -113,7 +193,27 @@ fn specta_builder() -> Builder<tauri::Wry> {
             check_update,
             install_update,
             load_update_config,
-            save_update_config
+            save_update_config,
+            get_ssh_config_snapshot,
+            preview_ssh_config,
+            apply_ssh_config,
+            restore_ssh_config,
+            preview_ssh_config_restore,
+            get_ssh_key_snapshot,
+            create_ssh_key,
+            import_ssh_key,
+            rename_ssh_key,
+            backup_ssh_key,
+            read_ssh_public_key,
+            delete_ssh_key,
+            restore_ssh_key,
+            load_terminal_open_mode,
+            save_terminal_open_mode,
+            open_system_terminal,
+            show_desktop_card,
+            set_desktop_card_always_on_top,
+            open_desktop_card_host,
+            close_desktop_card
         ])
         .events(collect_events![
             events::HostsLoaded,
@@ -207,7 +307,7 @@ fn main() {
     #[cfg(debug_assertions)]
     export_bindings(BINDINGS_PATH);
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         // Persists UI prefs (theme, sidebar collapse, refresh interval) from the
         // frontend JS API — no bespoke command (tech-gui.md §4.2, §5.1).
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -239,8 +339,20 @@ fn main() {
                 }
             }
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if should_hide_on_close(
+                    window.label(),
+                    EXIT_REQUESTED.load(std::sync::atomic::Ordering::Acquire),
+                ) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(move |app| {
             builder.mount_events(app);
+            install_tray(app)?;
 
             let reveal = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -306,13 +418,23 @@ fn main() {
             // `UpdateAvailable` before the webview can receive them (§3.4).
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("failed to launch OmnySSH Desktop");
+    app.run(|_app, event| {
+        if let tauri::RunEvent::ExitRequested { api, .. } = event {
+            if should_prevent_app_exit(EXIT_REQUESTED.load(std::sync::atomic::Ordering::Acquire)) {
+                api.prevent_exit();
+            }
+        }
+    });
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{export_bindings, should_retry_software_rendering, BINDINGS_PATH};
+    use super::{
+        export_bindings, should_hide_on_close, should_prevent_app_exit,
+        should_retry_software_rendering, BINDINGS_PATH,
+    };
 
     /// The committed bindings must match a fresh export — fails loudly on drift
     /// without mutating the tracked file (tech-gui.md §0.2 acceptance, §3.3).
@@ -343,5 +465,18 @@ mod tests {
         assert!(!should_retry_software_rendering(false, false, true));
         // Both guards at once, in case one is ever dropped.
         assert!(!should_retry_software_rendering(false, true, true));
+    }
+
+    #[test]
+    fn only_the_main_window_close_is_redirected_to_the_tray() {
+        assert!(should_hide_on_close("main", false));
+        assert!(!should_hide_on_close("main", true));
+        assert!(!should_hide_on_close("secondary", false));
+    }
+
+    #[test]
+    fn only_the_tray_quit_action_allows_process_exit() {
+        assert!(should_prevent_app_exit(false));
+        assert!(!should_prevent_app_exit(true));
     }
 }

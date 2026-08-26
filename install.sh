@@ -1,6 +1,6 @@
 #!/bin/sh
 # OmnySSH installation script
-# Usage: curl -fsSL https://raw.githubusercontent.com/timhartmann7/omnyssh/main/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh/main/install.sh | sh
 
 set -e
 
@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # GitHub repository
-REPO="timhartmann7/omnyssh"
+REPO="cyrusgogogo/omnyssh"
 BINARY_NAME="omny"
 
 # Print colored messages
@@ -263,11 +263,14 @@ install_man_page() {
     print_info "Installing man page..."
 
     MAN_URL="https://raw.githubusercontent.com/$REPO/$VERSION/doc/omny.1"
+    MAN_ZH_URL="https://raw.githubusercontent.com/$REPO/$VERSION/doc/zh_CN/omny.1"
     if [ "$IS_TERMUX" = "1" ]; then
-        MAN_DIR="$PREFIX/share/man/man1"
+        MAN_ROOT="$PREFIX/share/man"
     else
-        MAN_DIR="/usr/local/share/man/man1"
+        MAN_ROOT="/usr/local/share/man"
     fi
+    MAN_DIR="$MAN_ROOT/man1"
+    MAN_ZH_DIR="$MAN_ROOT/zh_CN/man1"
 
     if ! command -v curl >/dev/null 2>&1; then
         print_info "Man page installation skipped (curl not found)"
@@ -288,6 +291,21 @@ install_man_page() {
         print_success "Man page installed. Run 'man omny' for documentation"
     else
         print_info "Man page installation skipped (optional)"
+    fi
+
+    # Install the Simplified Chinese page alongside English. `man` selects it
+    # from LC_MESSAGES/LANG; users can also run `man -L zh_CN omny`.
+    MAN_ZH_TMP="$TMP_DIR/omny.zh_CN.1"
+    if curl -fsSL "$MAN_ZH_URL" -o "$MAN_ZH_TMP" 2>/dev/null; then
+        if mkdir -p "$MAN_ZH_DIR" 2>/dev/null && cp "$MAN_ZH_TMP" "$MAN_ZH_DIR/omny.1" 2>/dev/null; then
+            print_success "Simplified Chinese man page installed"
+        elif [ "$IS_TERMUX" != "1" ] && sudo mkdir -p "$MAN_ZH_DIR" 2>/dev/null && sudo cp "$MAN_ZH_TMP" "$MAN_ZH_DIR/omny.1" 2>/dev/null; then
+            print_success "Simplified Chinese man page installed"
+        else
+            print_info "Simplified Chinese man page installation skipped (optional)"
+        fi
+    else
+        print_info "Simplified Chinese man page installation skipped (download failed)"
     fi
 }
 

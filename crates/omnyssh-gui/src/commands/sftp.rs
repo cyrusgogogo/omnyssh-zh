@@ -32,17 +32,16 @@ pub async fn sftp_open(
     state: State<'_, GuiState>,
     host_name: String,
 ) -> Result<u64, CommandError> {
-    let host = state.host_by_name(&host_name).ok_or_else(|| CommandError {
-        message: format!("unknown host '{host_name}'"),
+    let host = state.host_by_name(&host_name).ok_or_else(|| {
+        CommandError::new("sftp-open", format!("unknown host '{host_name}'"))
+            .with_arg("host", host_name.clone())
     })?;
     // A dedicated channel per tab: its owner is the session id, so the forwarder can
     // attribute the core's session-less `sftp-*` events to this tab (§3.4).
     let (tx, rx) = mpsc::channel::<CoreEvent>(SFTP_EVENT_BUFFER);
     let manager = SftpManager::connect(&host, tx)
         .await
-        .map_err(|e| CommandError {
-            message: e.to_string(),
-        })?;
+        .map_err(|e| CommandError::new("sftp-open", e.to_string()))?;
     let session_id = state.register_sftp(manager);
     tauri::async_runtime::spawn(bridge::forward_sftp_events(app, session_id, rx));
     Ok(session_id)
@@ -167,9 +166,9 @@ pub fn sftp_close(state: State<'_, GuiState>, session_id: u64) -> Result<(), Com
 #[tauri::command]
 #[specta::specta]
 pub async fn list_local_dir(path: String) -> Result<Vec<FileEntryDto>, CommandError> {
-    let entries = core_list_local_dir(&path).await.map_err(|e| CommandError {
-        message: e.to_string(),
-    })?;
+    let entries = core_list_local_dir(&path)
+        .await
+        .map_err(|e| CommandError::new("local-files", e.to_string()))?;
     Ok(entries.iter().map(FileEntryDto::from).collect())
 }
 
@@ -179,7 +178,5 @@ pub async fn list_local_dir(path: String) -> Result<Vec<FileEntryDto>, CommandEr
 pub async fn preview_local_file(path: String) -> Result<String, CommandError> {
     core_preview_local_file(&path)
         .await
-        .map_err(|e| CommandError {
-            message: e.to_string(),
-        })
+        .map_err(|e| CommandError::new("local-files", e.to_string()))
 }

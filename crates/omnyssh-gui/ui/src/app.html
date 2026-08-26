@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en-US" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href="%sveltekit.assets%/logo.svg" />
@@ -8,6 +8,11 @@
       // No-FOUC: paint the persisted theme before first frame. Mirrors the
       // localStorage copy the theme store keeps; defaults to dark (tech-gui.md §5.1).
       (function () {
+        try {
+          if (new URLSearchParams(location.search).get('view') === 'desktop-card') {
+            document.documentElement.setAttribute('data-window', 'desktop-card');
+          }
+        } catch (e) {}
         try {
           var t = localStorage.getItem('omnyssh-theme');
           document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
@@ -21,6 +26,15 @@
             document.documentElement.setAttribute('data-os', 'macos');
           }
         } catch (e) {}
+        try {
+          var pref = localStorage.getItem('omnyssh-language') || 'system';
+          var requested = pref === 'system' ? (navigator.language || 'en-US') : pref;
+          var normalized = requested.replace('_', '-').toLowerCase();
+          var simplified = normalized === 'zh' || normalized === 'zh-cn' || normalized === 'zh-sg' || normalized.indexOf('zh-hans') === 0;
+          document.documentElement.lang = simplified ? 'zh-CN' : 'en-US';
+        } catch (e) {
+          document.documentElement.lang = 'en-US';
+        }
       })();
     </script>
     %sveltekit.head%

@@ -12,6 +12,7 @@
 //! - Connect timeout: 10 seconds (per hop)
 //! - Command timeout: 30 seconds
 
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -265,12 +266,13 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// failure, or an unresolvable `ProxyJump` chain.
 pub(crate) async fn connect_and_auth(host: &Host) -> anyhow::Result<SshConnection> {
     let chain = jump_chain(host).await?;
-    let config = client_config();
 
     // Walk the bastions outward: the first is reached directly, every later one
     // through its predecessor. The target then rides the last hop.
     let mut jumps: Vec<Handle<KnownHostsHandler>> = Vec::with_capacity(chain.len());
     for hop in &chain {
+        let config = client_config(hop)
+            .with_context(|| format!("invalid Ciphers for ProxyJump host '{}'", hop.name))?;
         let handle = match jumps.last() {
             None => connect_direct(&config, hop).await,
             Some(via) => connect_tunnelled(&config, via, hop).await,
@@ -279,6 +281,8 @@ pub(crate) async fn connect_and_auth(host: &Host) -> anyhow::Result<SshConnectio
         jumps.push(handle);
     }
 
+    let config =
+        client_config(host).with_context(|| format!("invalid Ciphers for host '{}'", host.name))?;
     let handle = match (jumps.last(), chain.last()) {
         (Some(via), Some(last)) => connect_tunnelled(&config, via, host)
             .await
@@ -307,8 +311,8 @@ pub(crate) async fn connect_budget(host: &Host) -> Duration {
 }
 
 /// The shared russh client configuration (timeouts + keepalives).
-fn client_config() -> Arc<client::Config> {
-    Arc::new(client::Config {
+fn client_config(host: &Host) -> anyhow::Result<Arc<client::Config>> {
+    let mut config = client::Config {
         // No inactivity timeout: russh skips resetting it on the iteration that
         // sends a keepalive, so a peer that never answers `keepalive@openssh.com`
         // (common in appliance SSH stacks) was torn down after 30 s even while
@@ -316,7 +320,85 @@ fn client_config() -> Arc<client::Config> {
         keepalive_interval: Some(Duration::from_secs(15)),
         keepalive_max: 3,
         ..Default::default()
-    })
+    };
+    if let Some(spec) = host.ciphers.as_deref() {
+        config.preferred.cipher =
+            Cow::Owned(apply_cipher_spec(config.preferred.cipher.as_ref(), spec)?);
+    }
+    Ok(Arc::new(config))
+}
+
+fn apply_cipher_spec(
+    defaults: &[russh::cipher::Name],
+    spec: &str,
+) -> anyhow::Result<Vec<russh::cipher::Name>> {
+    let spec = spec.trim();
+    if spec.is_empty() {
+        anyhow::bail!("Ciphers cannot be empty");
+    }
+    let (modifier, body) = match spec.as_bytes()[0] {
+        b'+' | b'-' | b'^' => (Some(spec.as_bytes()[0] as char), &spec[1..]),
+        _ => (None, spec),
+    };
+    if body.is_empty() {
+        anyhow::bail!("Ciphers contains no algorithms");
+    }
+
+    if modifier == Some('-') {
+        let patterns = body
+            .split(',')
+            .map(|pattern| {
+                if pattern.is_empty() {
+                    anyhow::bail!("Ciphers contains an empty pattern");
+                }
+                glob::Pattern::new(pattern)
+                    .with_context(|| format!("invalid Ciphers removal pattern '{pattern}'"))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let retained = defaults
+            .iter()
+            .copied()
+            .filter(|name| {
+                !patterns
+                    .iter()
+                    .any(|pattern| pattern.matches(name.as_ref()))
+            })
+            .collect::<Vec<_>>();
+        if retained.is_empty() {
+            anyhow::bail!("Ciphers removes every supported algorithm");
+        }
+        return Ok(retained);
+    }
+
+    let requested = body
+        .split(',')
+        .map(|name| {
+            russh::cipher::Name::try_from(name)
+                .map_err(|()| anyhow!("unsupported SSH cipher '{name}'"))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let mut result = match modifier {
+        Some('+') => defaults.to_vec(),
+        Some('^') => Vec::with_capacity(requested.len() + defaults.len()),
+        None => Vec::with_capacity(requested.len()),
+        Some(_) => unreachable!(),
+    };
+    for name in &requested {
+        if !result.contains(name) {
+            result.push(*name);
+        }
+    }
+    if modifier == Some('^') {
+        for name in defaults {
+            if !result.contains(name) {
+                result.push(*name);
+            }
+        }
+    }
+    if result.is_empty() {
+        anyhow::bail!("Ciphers contains no supported algorithms");
+    }
+    Ok(result)
 }
 
 /// Resolves `host`'s `ProxyJump` into the hops to connect before it.
@@ -609,4 +691,139 @@ fn expand_tilde(path: &str) -> String {
         }
     }
     path.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone)]
+    struct CbcOnlyServer;
+
+    impl russh::server::Server for CbcOnlyServer {
+        type Handler = Self;
+
+        fn new_client(&mut self, _: Option<std::net::SocketAddr>) -> Self::Handler {
+            self.clone()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl russh::server::Handler for CbcOnlyServer {
+        type Error = anyhow::Error;
+    }
+
+    struct AcceptTestServerKey;
+
+    #[async_trait::async_trait]
+    impl russh::client::Handler for AcceptTestServerKey {
+        type Error = anyhow::Error;
+
+        async fn check_server_key(
+            &mut self,
+            _: &russh_keys::key::PublicKey,
+        ) -> Result<bool, Self::Error> {
+            Ok(true)
+        }
+    }
+
+    #[tokio::test]
+    async fn ssh_config_cipher_survives_manual_alias_collision_and_negotiates() {
+        use russh::server::Server as _;
+
+        let manual = Host {
+            name: "legacy".into(),
+            source: crate::ssh::client::HostSource::Manual,
+            ..Host::default()
+        };
+        let ssh = Host {
+            name: "legacy".into(),
+            ciphers: Some("+aes256-cbc".into()),
+            source: crate::ssh::client::HostSource::SshConfig,
+            ..Host::default()
+        };
+        let merged = crate::config::merge_hosts(vec![manual], vec![ssh]);
+        let client_config = client_config(&merged[0]).unwrap();
+
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let mut server_config = russh::server::Config::default();
+        server_config
+            .keys
+            .push(russh_keys::key::KeyPair::generate_ed25519());
+        server_config.preferred.cipher = Cow::Owned(vec![russh::cipher::AES_256_CBC]);
+        let server_config = Arc::new(server_config);
+        let server = tokio::spawn(async move {
+            let mut server = CbcOnlyServer;
+            server.run_on_socket(server_config, &listener).await
+        });
+
+        let result = russh::client::connect(client_config, address, AcceptTestServerKey).await;
+        server.abort();
+
+        let handle = result.expect("client should negotiate the SSH-configured CBC cipher");
+        let _ = handle
+            .disconnect(russh::Disconnect::ByApplication, "", "en")
+            .await;
+    }
+
+    #[test]
+    fn ciphers_append_adds_legacy_cipher_for_only_that_host() {
+        let default_host = Host::default();
+        let legacy_host = Host {
+            ciphers: Some("+aes256-cbc".into()),
+            ..Host::default()
+        };
+
+        let default_config = client_config(&default_host).unwrap();
+        let legacy_config = client_config(&legacy_host).unwrap();
+
+        assert!(!default_config
+            .preferred
+            .cipher
+            .contains(&russh::cipher::AES_256_CBC));
+        assert!(legacy_config
+            .preferred
+            .cipher
+            .contains(&russh::cipher::AES_256_CBC));
+        assert_eq!(
+            legacy_config.preferred.cipher.last(),
+            Some(&russh::cipher::AES_256_CBC)
+        );
+    }
+
+    #[test]
+    fn cipher_modifiers_follow_openssh_list_semantics() {
+        let defaults = client::Config::default().preferred.cipher.into_owned();
+
+        let prepended = apply_cipher_spec(&defaults, "^aes256-cbc").unwrap();
+        assert_eq!(prepended.first(), Some(&russh::cipher::AES_256_CBC));
+        assert_eq!(
+            prepended
+                .iter()
+                .filter(|name| **name == russh::cipher::AES_256_CBC)
+                .count(),
+            1
+        );
+
+        let replaced = apply_cipher_spec(&defaults, "aes256-cbc,aes128-cbc").unwrap();
+        assert_eq!(
+            replaced,
+            vec![russh::cipher::AES_256_CBC, russh::cipher::AES_128_CBC]
+        );
+
+        let removed = apply_cipher_spec(&defaults, "-aes*-ctr").unwrap();
+        assert!(removed
+            .iter()
+            .all(|name| !name.as_ref().starts_with("aes") || !name.as_ref().ends_with("-ctr")));
+    }
+
+    #[test]
+    fn unsupported_configured_cipher_fails_with_its_name() {
+        let defaults = client::Config::default().preferred.cipher.into_owned();
+        let error = apply_cipher_spec(&defaults, "+not-a-real-cipher").unwrap_err();
+        assert!(error.to_string().contains("not-a-real-cipher"));
+    }
 }

@@ -43,12 +43,12 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, view: &ViewState)
         let msg = Paragraph::new(vec![
             Line::from(""),
             Line::from(Span::styled(
-                "  No SSH sessions open.",
+                format!("  {}", crate::i18n::tr("terminal-no-tabs")),
                 Style::default().fg(view.theme.text_muted),
             )),
             Line::from(""),
             Line::from(Span::styled(
-                "  Press Ctrl+T to connect to a host.",
+                format!("  {}", crate::i18n::tr("terminal-open-hint")),
                 Style::default()
                     .fg(Color::Gray)
                     .add_modifier(Modifier::ITALIC),
@@ -224,7 +224,11 @@ fn render_pty_pane(
     };
 
     let title = if tab.scroll_offset > 0 {
-        format!(" {}  ↑ scroll — type to return ", tab.host_name)
+        format!(
+            " {}  {} ",
+            tab.host_name,
+            crate::i18n::tr("terminal-scroll-mode")
+        )
     } else {
         format!(" {} ", tab.host_name)
     };
@@ -263,7 +267,8 @@ fn render_pty_pane(
             Err(_) => {
                 // Poisoned mutex — show a placeholder.
                 frame.render_widget(
-                    Paragraph::new("  [parser error]").style(Style::default().fg(theme.text_error)),
+                    Paragraph::new(format!("  [{}]", crate::i18n::tr("terminal-parser-error")))
+                        .style(Style::default().fg(theme.text_error)),
                     inner,
                 );
                 return;
@@ -451,9 +456,9 @@ fn render_host_picker(
     frame.render_widget(Clear, popup_area);
 
     let title = if picker.switch_pane_mode {
-        " Switch pane to host (Enter to switch) "
+        crate::i18n::tr("terminal-switch-host")
     } else {
-        " Connect to host (Enter to open tab) "
+        crate::i18n::tr("terminal-connect-host")
     };
 
     let block = Block::default()
@@ -467,7 +472,7 @@ fn render_host_picker(
 
     if state.hosts.is_empty() {
         frame.render_widget(
-            Paragraph::new("  No hosts configured. Add one on the Dashboard (a)."),
+            Paragraph::new(format!("  {}", crate::i18n::tr("terminal-no-hosts"))),
             inner,
         );
         return;

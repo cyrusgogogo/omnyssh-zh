@@ -357,6 +357,171 @@ async saveUpdateConfig(config: UpdateConfigDto) : Promise<Result<null, CommandEr
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async getSshConfigSnapshot() : Promise<Result<SshConfigSnapshotDto, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_ssh_config_snapshot") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async previewSshConfig(hosts: ManagedSshHostDto[]) : Promise<Result<SshConfigPreviewDto, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("preview_ssh_config", { hosts }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async applySshConfig(hosts: ManagedSshHostDto[], expectedMainHash: string, expectedManagedHash: string, allowMissingSsh: boolean) : Promise<Result<SshApplyReportDto, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("apply_ssh_config", { hosts, expectedMainHash, expectedManagedHash, allowMissingSsh }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async restoreSshConfig(backupId: string, expectedMainHash: string, expectedManagedHash: string) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("restore_ssh_config", { backupId, expectedMainHash, expectedManagedHash }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async previewSshConfigRestore(backupId: string) : Promise<Result<SshConfigPreviewDto, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("preview_ssh_config_restore", { backupId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getSshKeySnapshot() : Promise<Result<SshKeySnapshotDto, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_ssh_key_snapshot") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async createSshKey(name: string, fileStem: string, keyType: string) : Promise<Result<SshKeyRecordDto, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("create_ssh_key", { name, fileStem, keyType }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async importSshKey(name: string, privatePath: string) : Promise<Result<SshKeyRecordDto, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("import_ssh_key", { name, privatePath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async renameSshKey(id: string, name: string) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("rename_ssh_key", { id, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async backupSshKey(id: string) : Promise<Result<string, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("backup_ssh_key", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async readSshPublicKey(id: string) : Promise<Result<string, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("read_ssh_public_key", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteSshKey(id: string, confirmation: string) : Promise<Result<string, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_ssh_key", { id, confirmation }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async restoreSshKey(backupId: string) : Promise<Result<SshKeyRecordDto, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("restore_ssh_key", { backupId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async loadTerminalOpenMode() : Promise<Result<string, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("load_terminal_open_mode") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveTerminalOpenMode(mode: string) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_terminal_open_mode", { mode }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async openSystemTerminal(hostName: string) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("open_system_terminal", { hostName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async showDesktopCard() : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("show_desktop_card") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setDesktopCardAlwaysOnTop(alwaysOnTop: boolean) : Promise<Result<boolean, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_desktop_card_always_on_top", { alwaysOnTop }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Bring the main window forward and ask it to open the selected host. Sessions
+ * must live in the main webview: creating one in the compact card would leave an
+ * invisible terminal/SFTP tab behind when the card closes.
+ */
+async openDesktopCardHost(hostName: string, kind: string) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("open_desktop_card_host", { hostName, kind }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async closeDesktopCard() : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("close_desktop_card") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -411,12 +576,13 @@ updateAvailable: "update-available"
 
 /** user-defined types **/
 
-export type CommandError = { message: string }
+export type CommandError = { code: string; args: Partial<{ [key in string]: string }>; rawDetail: string | null }
 /**
  * Live connection state for a host (tech-gui.md §4.1). Internally tagged so the
  * frontend consumes a discriminated union keyed on `kind`.
  */
 export type ConnectionStatusDto = { kind: "unknown" } | { kind: "connecting" } | { kind: "connected" } | { kind: "failed"; message: string }
+export type DiscoveredSshKeyDto = { privatePath: string; publicPath: string; suggestedName: string; keyType: string }
 /**
  * A background error surfaced to the user.
  */
@@ -436,7 +602,7 @@ export type FilePreview = { sessionId: number; path: string; content: string }
  * (tech-gui.md §3.4). `hasKey` reports whether an identity file is configured;
  * the key path itself never crosses the boundary.
  */
-export type HostDto = { name: string; hostname: string; user: string; port: number; tags: string[]; notes?: string | null; source: HostSourceDto; hasKey: boolean; passwordAuthDisabled?: boolean | null; monitoring: MonitorModeDto; monitorPort?: number | null }
+export type HostDto = { name: string; hostname: string; user: string; port: number; tags: string[]; notes?: string | null; hiddenFromOverview: boolean; source: HostSourceDto; hasKey: boolean; passwordAuthDisabled?: boolean | null; monitoring: MonitorModeDto; monitorPort?: number | null }
 /**
  * Inbound host form payload for `save_host` (tech-gui.md §4.1, Stage 4.1). Always
  * builds a **manual** `Host`: editing an SSH-config import saves a copy that shadows
@@ -445,7 +611,7 @@ export type HostDto = { name: string; hostname: string; user: string; port: numb
  * travel back out: the outbound `HostDto` omits both (§3.4). Inbound only, so it
  * derives `Deserialize` (not `Serialize`).
  */
-export type HostInputDto = { name: string; hostname: string; user: string; port: number; identityFile?: string | null; password?: string | null; proxyJump?: string | null; tags: string[]; notes?: string | null; monitoring?: MonitorModeDto | null; monitorPort?: number | null }
+export type HostInputDto = { name: string; hostname: string; user: string; port: number; identityFile?: string | null; password?: string | null; proxyJump?: string | null; tags: string[]; notes?: string | null; hiddenFromOverview?: boolean; monitoring?: MonitorModeDto | null; monitorPort?: number | null }
 /**
  * Host origin, mirrors `omnyssh_core::ssh::client::HostSource`.
  */
@@ -485,6 +651,7 @@ export type KeySetupRollback = { hostName: string; result: string }
  * Maps from the core `KeySetupStep`.
  */
 export type KeySetupStepDto = { index: number; total: number; description: string }
+export type ManagedSshHostDto = { alias: string; hostname: string; user: string; port: number; identityFile: string | null; proxyJump: string | null; ciphers: string | null }
 /**
  * A metrics snapshot for a host (tech-gui.md §4.1). The core's `Instant` is
  * flattened to `ageSeconds` (seconds since the sample) so it can serialise.
@@ -568,6 +735,16 @@ export type SnippetResult = { hostName: string; snippetName: string; ok: boolean
  * names are lowercase (`global`, `host`).
  */
 export type SnippetScopeDto = "global" | "host"
+export type SshApplyReportDto = { backupId: string; sshValidation: string }
+export type SshBackupDto = { id: string; path: string }
+export type SshConfigPreviewDto = { mainHash: string; managedHash: string; mainDiff: string; managedDiff: string; warnings: SshDiagnosticDto[]; canApply: boolean }
+export type SshConfigSnapshotDto = { mainPath: string; managedPath: string; installed: boolean; writable: boolean; mainHash: string; managedHash: string; hosts: ManagedSshHostDto[]; sources: SshSourceFileDto[]; diagnostics: SshDiagnosticDto[]; backups: SshBackupDto[] }
+export type SshDiagnosticDto = { severity: SshDiagnosticSeverityDto; code: string; message: string; path: string | null; line: number | null }
+export type SshDiagnosticSeverityDto = "info" | "warning" | "blocking"
+export type SshKeyBackupDto = { id: string; keyId: string; name: string }
+export type SshKeyRecordDto = { id: string; name: string; privatePath: string; publicPath: string; keyType: string; available: boolean }
+export type SshKeySnapshotDto = { records: SshKeyRecordDto[]; discovered: DiscoveredSshKeyDto[]; backups: SshKeyBackupDto[] }
+export type SshSourceFileDto = { path: string; content: string | null; readOnly: boolean }
 /**
  * Raw PTY output bytes for a terminal session's per-session `Channel` (tech-gui.md
  * §3.3/§3.6). Deliberately **not** `Serialize`: that dodges the blanket

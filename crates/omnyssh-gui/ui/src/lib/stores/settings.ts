@@ -84,6 +84,42 @@ function createRefreshInterval() {
 
 export const refreshInterval = createRefreshInterval();
 
+export type TerminalOpenMode = 'default' | 'system';
+
+function normalizeTerminalOpenMode(value: unknown): TerminalOpenMode {
+  return value === 'system' ? 'system' : 'default';
+}
+
+function createTerminalOpenMode() {
+  const { subscribe, set: setStore } = writable<TerminalOpenMode>('default');
+  let current: TerminalOpenMode = 'default';
+
+  return {
+    subscribe,
+    async hydrate(): Promise<void> {
+      const { loadTerminalOpenMode } = await import('$lib/ipc/commands');
+      current = normalizeTerminalOpenMode(await loadTerminalOpenMode());
+      setStore(current);
+    },
+    async set(mode: TerminalOpenMode): Promise<void> {
+      const previous = current;
+      current = mode;
+      setStore(mode);
+      try {
+        const { saveTerminalOpenMode } = await import('$lib/ipc/commands');
+        await saveTerminalOpenMode(mode);
+      } catch (error) {
+        current = previous;
+        setStore(previous);
+        throw error;
+      }
+    }
+  };
+}
+
+/** Controls whether terminal actions create an embedded tab or launch the OS terminal. */
+export const terminalOpenMode = createTerminalOpenMode();
+
 /** Drive `refresh` on the current interval, re-arming whenever the interval changes.
  *  Returns a disposer. Kept free of the ipc layer so it stays unit-testable — the
  *  layout passes in the actual `refresh_metrics` call. */

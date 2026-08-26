@@ -85,7 +85,7 @@ test('prompts key setup, streams progress, then reflects key auth on the card', 
   await expect(dialog.getByText('Verifying key authentication')).toBeVisible();
 
   // Completion shows the generated key path.
-  await expect(dialog.getByText('Key authentication configured')).toBeVisible();
+  await expect(dialog.getByText('Key authentication is ready.')).toBeVisible();
   await expect(dialog.getByText(/omnyssh_pw-host_ed25519/)).toBeVisible();
 
   await dialog.getByRole('button', { name: 'Done' }).click();

@@ -21,6 +21,7 @@ pub const FORM_FIELD_LABELS: &[&str] = &[
     "Tags (comma-sep)",
     "Notes",
     "Monitoring (ssh | tcp | tcp:PORT)",
+    "Hidden from overview (yes | no)",
 ];
 
 /// Whether an edit changed anything a running poller reads. Everything else on
@@ -38,6 +39,7 @@ fn poller_inputs_changed(before: &Host, after: &Host) -> bool {
         || before.identity_file != after.identity_file
         || before.password != after.password
         || before.proxy_jump != after.proxy_jump
+        || before.ciphers != after.ciphers
         || before.original_ssh_host != after.original_ssh_host
         || before.monitoring != after.monitoring
         || before.monitor_port != after.monitor_port
@@ -64,6 +66,16 @@ fn parse_monitoring(value: &str) -> Result<(MonitorMode, Option<u16>), String> {
             .filter(|&p| p != 0)
             .map(|p| (MonitorMode::TcpPort, Some(p)))
             .ok_or_else(|| format!("Monitoring must be 'ssh', 'tcp' or 'tcp:PORT', got '{other}'")),
+    }
+}
+
+fn parse_hidden_from_overview(value: &str) -> Result<bool, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "" | "no" | "false" | "n" => Ok(false),
+        "yes" | "true" | "y" => Ok(true),
+        _ => Err(format!(
+            "Hidden from overview must be 'yes' or 'no', got '{value}'"
+        )),
     }
 }
 
@@ -137,6 +149,11 @@ impl HostForm {
         form.fields[6] = FormField::with_value(host.tags.join(", "));
         form.fields[7] = FormField::with_value(host.notes.as_deref().unwrap_or(""));
         form.fields[8] = FormField::with_value(monitoring_value(host));
+        form.fields[9] = FormField::with_value(if host.hidden_from_overview {
+            "yes"
+        } else {
+            "no"
+        });
         form
     }
 
@@ -210,6 +227,7 @@ impl HostForm {
         };
 
         let (monitoring, monitor_port) = parse_monitoring(self.fields[8].value.trim())?;
+        let hidden_from_overview = parse_hidden_from_overview(self.fields[9].value.trim())?;
 
         Ok(Host {
             name,
@@ -219,8 +237,10 @@ impl HostForm {
             identity_file,
             password,
             proxy_jump: None,
+            ciphers: None,
             tags,
             notes,
+            hidden_from_overview,
             source,
             original_ssh_host: None,
             monitoring,
@@ -296,6 +316,8 @@ pub struct HostListView {
     pub tag_popup_selected: usize,
     /// All unique tags across all hosts (used by the tag picker popup).
     pub available_tags: Vec<String>,
+    /// Temporarily include hosts marked hidden so they can be edited again.
+    pub show_hidden: bool,
 }
 
 impl HostListView {
@@ -319,6 +341,10 @@ impl HostListView {
 
         // 1. Text filter.
         let mut indices = filter_hosts(hosts, &self.search_query);
+
+        if !self.show_hidden {
+            indices.retain(|&i| !hosts[i].hidden_from_overview);
+        }
 
         // Guard: drop any stale indices that fell out of bounds due to a host
         // removal that happened before rebuild_filter was called.
@@ -480,13 +506,16 @@ impl App {
                                 host_name
                             ));
                         } else {
-                            self.view.status_message = Some("Host added.".to_string());
+                            self.view.status_message = Some(crate::i18n::tr("status-host-added"));
                         }
                     }
                     Err(e) => {
                         // Restore popup so the user can correct the input.
                         self.view.host_list.popup = Some(HostPopup::Add(form));
-                        self.view.status_message = Some(format!("Error: {e}"));
+                        self.view.status_message = Some(crate::i18n::tr_args(
+                            "detail-failed",
+                            &[("error", &e.to_string())],
+                        ));
                     }
                 }
             }
@@ -506,6 +535,7 @@ impl App {
                         // an imported host would otherwise drop its bastion and
                         // the saved copy would try to connect direct.
                         host.proxy_jump = old_host.and_then(|h| h.proxy_jump.clone());
+                        host.ciphers = old_host.and_then(|h| h.ciphers.clone());
 
                         // An import is adopted under the name it was imported by; a copy
                         // already adopted keeps the one it carries. Dropping it brings the
@@ -573,11 +603,14 @@ impl App {
                         &state.connection_statuses,
                     );
                     self.view.host_list.rebuild_tags(&state.hosts);
-                    self.view.status_message = Some("Host updated.".to_string());
+                    self.view.status_message = Some(crate::i18n::tr("status-host-updated"));
                 }
                 Err(e) => {
                     self.view.host_list.popup = Some(HostPopup::Edit { host_idx, form });
-                    self.view.status_message = Some(format!("Error: {e}"));
+                    self.view.status_message = Some(crate::i18n::tr_args(
+                        "detail-failed",
+                        &[("error", &e.to_string())],
+                    ));
                 }
             },
 
@@ -595,7 +628,10 @@ impl App {
                 let mut state = self.state.write().await;
                 if idx < state.hosts.len() {
                     let removed = state.hosts.remove(idx);
-                    self.view.status_message = Some(format!("Deleted '{}'.", removed.name));
+                    self.view.status_message = Some(crate::i18n::tr_args(
+                        "status-host-deleted",
+                        &[("host", &removed.name)],
+                    ));
                 }
             }
             self.save_manual_hosts().await;
@@ -613,7 +649,10 @@ impl App {
     pub(crate) async fn save_manual_hosts(&mut self) {
         let hosts = self.state.read().await.hosts.clone();
         if let Err(e) = config::save_hosts(&hosts) {
-            self.view.status_message = Some(format!("Save failed: {e}"));
+            self.view.status_message = Some(crate::i18n::tr_args(
+                "status-save-failed",
+                &[("error", &e.to_string())],
+            ));
         }
     }
 }
@@ -716,6 +755,10 @@ mod tests {
             },
             Host {
                 proxy_jump: Some(String::from("bastion")),
+                ..base.clone()
+            },
+            Host {
+                ciphers: Some(String::from("+aes256-cbc")),
                 ..base.clone()
             },
             Host {
@@ -1115,6 +1158,21 @@ mod tests {
         let mut view = HostListView::default();
         view.rebuild_filter(&hosts, &HashMap::new(), &HashMap::new());
         assert_eq!(view.filtered_indices.len(), 2);
+    }
+
+    #[test]
+    fn rebuild_hides_overview_alias_until_requested() {
+        let mut hidden = host("public", "example.com", &[], None);
+        hidden.hidden_from_overview = true;
+        let hosts = [host("lan", "192.168.1.10", &[], None), hidden];
+        let mut view = HostListView::default();
+
+        view.rebuild_filter(&hosts, &HashMap::new(), &HashMap::new());
+        assert_eq!(filtered_names(&view, &hosts), ["lan"]);
+
+        view.show_hidden = true;
+        view.rebuild_filter(&hosts, &HashMap::new(), &HashMap::new());
+        assert_eq!(filtered_names(&view, &hosts), ["lan", "public"]);
     }
 
     #[test]

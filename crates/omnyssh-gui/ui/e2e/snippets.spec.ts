@@ -93,14 +93,14 @@ test('lists the saved snippets', async ({ page }) => {
 test('executes a snippet on a chosen host and shows the per-host result', async ({ page }) => {
   await boot(page);
 
-  await page.getByRole('button', { name: 'Run uptime' }).click();
-  const runner = page.getByRole('dialog', { name: 'Run snippet' });
+  await page.getByRole('button', { name: 'Run “uptime”' }).click();
+  const runner = page.getByRole('dialog', { name: 'Run', exact: true });
   await expect(runner).toBeVisible();
 
   await runner.getByRole('checkbox', { name: 'web-1' }).click();
   await runner.getByRole('button', { name: /Run on 1 host/ }).click();
 
-  const results = page.getByRole('dialog', { name: 'Snippet results' });
+  const results = page.getByRole('dialog', { name: 'Results', exact: true });
   await expect(results).toBeVisible();
   await expect(results.getByText('web-1', { exact: true })).toBeVisible();
   await expect(results.getByText('output from web-1')).toBeVisible();
@@ -109,8 +109,8 @@ test('executes a snippet on a chosen host and shows the per-host result', async 
 test('prompts for declared params before executing', async ({ page }) => {
   await boot(page);
 
-  await page.getByRole('button', { name: 'Run restart-web' }).click();
-  const runner = page.getByRole('dialog', { name: 'Run snippet' });
+  await page.getByRole('button', { name: 'Run “restart-web”' }).click();
+  const runner = page.getByRole('dialog', { name: 'Run', exact: true });
   await expect(runner).toBeVisible();
 
   // The declared param is prompted for.
@@ -121,7 +121,7 @@ test('prompts for declared params before executing', async ({ page }) => {
   await runner.getByRole('checkbox', { name: 'db-1' }).click();
   await runner.getByRole('button', { name: /Run on 1 host/ }).click();
 
-  const results = page.getByRole('dialog', { name: 'Snippet results' });
+  const results = page.getByRole('dialog', { name: 'Results', exact: true });
   await expect(results.getByText('output from db-1')).toBeVisible();
 });
 
@@ -163,7 +163,7 @@ test('rejects a new snippet whose name already exists', async ({ page }) => {
 
   // The editor stays open with an inline error rather than clobbering the existing one.
   await expect(editor).toBeVisible();
-  await expect(editor.getByText('A snippet named "uptime" already exists')).toBeVisible();
+  await expect(editor.getByText('A snippet named “uptime” already exists')).toBeVisible();
 });
 
 test('renders duplicate-named snippets without crashing (core never dedups names)', async ({

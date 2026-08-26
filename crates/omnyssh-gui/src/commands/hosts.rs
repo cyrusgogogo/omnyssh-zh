@@ -44,12 +44,8 @@ pub async fn reload_hosts(app: AppHandle, state: State<'_, GuiState>) -> Result<
     // worker so in-flight commands and the event bridge don't stall.
     let hosts = tauri::async_runtime::spawn_blocking(omnyssh_core::config::load_all_hosts)
         .await
-        .map_err(|e| CommandError {
-            message: format!("host load task failed: {e}"),
-        })?
-        .map_err(|e| CommandError {
-            message: e.to_string(),
-        })?;
+        .map_err(|e| CommandError::new("hosts-list", format!("host load task failed: {e}")))?
+        .map_err(|e| CommandError::new("hosts-list", e.to_string()))?;
     state.set_hosts(hosts);
     state.restart_pollers();
     let _ = events::HostsLoaded(state.host_dtos()).emit(&app);
@@ -110,6 +106,7 @@ fn upsert(hosts: &mut Vec<Host>, input: HostInputDto, imported: Option<Host>) {
                 .identity_file
                 .or_else(|| existing.identity_file.clone());
             host.proxy_jump = host.proxy_jump.or_else(|| existing.proxy_jump.clone());
+            host.ciphers = existing.ciphers.clone();
             host.key_setup_date = existing.key_setup_date.clone();
             host.password_auth_disabled = existing.password_auth_disabled;
             host.original_ssh_host = existing.original_ssh_host.clone();
@@ -122,6 +119,7 @@ fn upsert(hosts: &mut Vec<Host>, input: HostInputDto, imported: Option<Host>) {
             // address direct, which is exactly the hazard fixed in 1.1.1.
             if let Some(imported) = imported {
                 host.proxy_jump = host.proxy_jump.or(imported.proxy_jump);
+                host.ciphers = imported.ciphers;
                 host.identity_file = host.identity_file.or(imported.identity_file);
                 // Which `~/.ssh/config` entry this copy stands in for. Inert while the
                 // names match — `merge_hosts` already drops the import on the name — but
@@ -151,12 +149,8 @@ async fn persist(mutate: impl FnOnce(&mut Vec<Host>) + Send + 'static) -> Result
         save_hosts(&hosts)
     })
     .await
-    .map_err(|e| CommandError {
-        message: format!("host save task failed: {e}"),
-    })?
-    .map_err(|e| CommandError {
-        message: e.to_string(),
-    })
+    .map_err(|e| CommandError::new("host-save", format!("host save task failed: {e}")))?
+    .map_err(|e| CommandError::new("host-save", e.to_string()))
 }
 
 #[cfg(test)]
@@ -176,6 +170,7 @@ mod tests {
             proxy_jump: None,
             tags: vec![],
             notes: None,
+            hidden_from_overview: false,
             monitoring: None,
             monitor_port: None,
         }
@@ -211,12 +206,13 @@ mod tests {
     #[test]
     fn upsert_preserves_secrets_and_metadata_the_form_cannot_see() {
         // The edit form is seeded from `HostDto`, which omits password/identity/proxy
-        // (§3.4); a blank submission must not wipe them, nor the key-setup metadata.
+        // and Ciphers (§3.4); a blank submission must not wipe them or key metadata.
         let mut hosts = vec![Host {
             name: "web".to_string(),
             password: Some("keep-me".to_string()),
             identity_file: Some("/keys/id".to_string()),
             proxy_jump: Some("bastion".to_string()),
+            ciphers: Some("+aes256-cbc".to_string()),
             key_setup_date: Some("2026-01-01".to_string()),
             password_auth_disabled: Some(true),
             original_ssh_host: Some("web-old".to_string()),
@@ -228,6 +224,7 @@ mod tests {
         assert_eq!(h.password.as_deref(), Some("keep-me"));
         assert_eq!(h.identity_file.as_deref(), Some("/keys/id"));
         assert_eq!(h.proxy_jump.as_deref(), Some("bastion"));
+        assert_eq!(h.ciphers.as_deref(), Some("+aes256-cbc"));
         assert_eq!(h.key_setup_date.as_deref(), Some("2026-01-01"));
         assert_eq!(h.password_auth_disabled, Some(true));
         assert_eq!(h.original_ssh_host.as_deref(), Some("web-old"));
@@ -242,6 +239,7 @@ mod tests {
             name: "internal".to_string(),
             hostname: "10.0.0.9".to_string(),
             proxy_jump: Some("public-proxy".to_string()),
+            ciphers: Some("+aes256-cbc".to_string()),
             identity_file: Some("/keys/id_ed25519".to_string()),
             source: HostSource::SshConfig,
             ..Host::default()
@@ -259,6 +257,7 @@ mod tests {
             "the copy is what hosts.toml holds"
         );
         assert_eq!(h.proxy_jump.as_deref(), Some("public-proxy"));
+        assert_eq!(h.ciphers.as_deref(), Some("+aes256-cbc"));
         assert_eq!(h.identity_file.as_deref(), Some("/keys/id_ed25519"));
         assert_eq!(h.notes.as_deref(), Some("adopted"));
         assert_eq!(

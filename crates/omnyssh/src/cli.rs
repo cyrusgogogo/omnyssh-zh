@@ -28,6 +28,12 @@ pub struct Cli {
     #[arg(short, long, value_name = "THEME")]
     pub theme: Option<String>,
 
+    /// Override the UI language for this run (system | en-US | zh-CN).
+    ///
+    /// Unlike an in-app selection, this flag does not modify the config file.
+    #[arg(short = 'l', long, value_name = "LOCALE")]
+    pub language: Option<String>,
+
     /// Enable verbose debug logging (written to a log file in the config directory).
     #[arg(short, long)]
     pub verbose: bool,

@@ -11,6 +11,7 @@ function host(name: string, extra: Partial<HostDto> = {}): HostDto {
     user: 'deploy',
     port: 22,
     tags: [],
+    hiddenFromOverview: false,
     source: 'manual',
     hasKey: false,
     monitoring: 'ssh',

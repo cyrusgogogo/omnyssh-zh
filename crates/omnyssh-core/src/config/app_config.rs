@@ -42,6 +42,10 @@ impl Default for GeneralConfig {
 pub struct UiConfig {
     /// One of: `default`, `dracula`, `nord`, `gruvbox`.
     pub theme: String,
+    /// UI language preference: `system`, `en-US`, or `zh-CN`.
+    pub language: String,
+    /// Desktop terminal launch mode: `default` (embedded) or `system`.
+    pub terminal_open_mode: String,
     // TODO(future-stage): these fields are parsed from user config but not yet
     // wired up to the renderer.  They are kept in the struct so existing config
     // files are accepted without error; the renderer will consume them once the
@@ -79,6 +83,8 @@ impl Default for UiConfig {
     fn default() -> Self {
         Self {
             theme: String::from("default"),
+            language: String::from(crate::locale::SYSTEM),
+            terminal_open_mode: String::from("default"),
             show_ip: true,
             show_uptime: true,
             card_layout: String::from("grid"),
@@ -99,6 +105,8 @@ pub struct KeybindingsConfig {
     pub dashboard: String,
     pub file_manager: String,
     pub snippets: String,
+    /// Opens the runtime language selector. Default: `"Shift+L"`.
+    pub language: String,
     /// Key to cycle to the next app screen (dashboard → files → snippets →
     /// terminal).  Also used to switch panels in File Manager.
     /// Default: `"Tab"`.
@@ -169,6 +177,7 @@ impl Default for KeybindingsConfig {
             dashboard: String::from("F1"),
             file_manager: String::from("F2"),
             snippets: String::from("F3"),
+            language: String::from("Shift+L"),
             next_screen: String::from("Tab"),
             next_tab: String::from("Ctrl+N"),
         }
@@ -205,8 +214,19 @@ pub fn load_app_config(path: Option<&std::path::Path>) -> anyhow::Result<AppConf
     let content = std::fs::read_to_string(&config_path)
         .with_context(|| format!("Failed to read config: {}", config_path.display()))?;
 
-    let config: AppConfig = toml::from_str(&content)
+    let mut config: AppConfig = toml::from_str(&content)
         .with_context(|| format!("Failed to parse config: {}", config_path.display()))?;
+
+    // Existing installations predate the language field and must remain in
+    // English after upgrade. Fresh defaults use `system`.
+    let has_language = content
+        .parse::<toml::Value>()
+        .ok()
+        .and_then(|value| value.get("ui")?.get("language").cloned())
+        .is_some();
+    if !has_language {
+        config.ui.language = crate::locale::EN_US.to_string();
+    }
 
     Ok(config)
 }
@@ -261,6 +281,19 @@ pub fn save_theme_to_config(theme_name: &str) -> anyhow::Result<()> {
     persist_config(|config| config.ui.theme = theme_name.to_string())
 }
 
+/// Saves the language selection to the config file's `[ui]` section.
+pub fn save_language_to_config(language: &str) -> anyhow::Result<()> {
+    persist_config(|config| config.ui.language = language.to_string())
+}
+
+/// Saves the desktop terminal launch preference to the config file.
+pub fn save_terminal_open_mode_to_config(mode: &str) -> anyhow::Result<()> {
+    if !matches!(mode, "default" | "system") {
+        anyhow::bail!("terminal open mode must be 'default' or 'system'");
+    }
+    persist_config(|config| config.ui.terminal_open_mode = mode.to_string())
+}
+
 /// Saves the update-checker preferences to the config file's `[update]`
 /// section.
 ///
@@ -301,5 +334,15 @@ mod tests {
         let parsed: AppConfig = toml::from_str(&serialized).unwrap();
         assert!(!parsed.update.check_on_startup);
         assert_eq!(parsed.update.skip_version, "1.2.3");
+    }
+
+    #[test]
+    fn terminal_open_mode_defaults_and_round_trips() {
+        let cfg: AppConfig = toml::from_str("").unwrap();
+        assert_eq!(cfg.ui.terminal_open_mode, "default");
+        let mut cfg = cfg;
+        cfg.ui.terminal_open_mode = "system".into();
+        let parsed: AppConfig = toml::from_str(&toml::to_string(&cfg).unwrap()).unwrap();
+        assert_eq!(parsed.ui.terminal_open_mode, "system");
     }
 }

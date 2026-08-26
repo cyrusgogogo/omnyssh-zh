@@ -64,9 +64,9 @@ pub struct CardData<'a> {
 /// port matters: a green line for port 8443 says nothing about SSH on 22.
 fn reachability_line(status: Option<&ConnectionStatus>, port: Option<u16>) -> (String, Color) {
     let (state, color) = match status {
-        Some(ConnectionStatus::Connected) => ("reachable", Color::Green),
-        Some(ConnectionStatus::Failed(_)) => ("unreachable", Color::Red),
-        _ => ("checking", Color::DarkGray),
+        Some(ConnectionStatus::Connected) => (crate::i18n::tr("card-reachable"), Color::Green),
+        Some(ConnectionStatus::Failed(_)) => (crate::i18n::tr("card-unreachable"), Color::Red),
+        _ => (crate::i18n::tr("card-checking"), Color::DarkGray),
     };
     let text = match port {
         Some(p) => format!("─── {state} :{p} ───"),
@@ -192,7 +192,7 @@ pub fn render_card(
         // Rows 1-2: offline message
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
-                "─── offline ───",
+                format!("─── {} ───", crate::i18n::tr("dashboard-status-offline")),
                 Style::default().fg(Color::Red),
             ))),
             rows[1],
@@ -291,7 +291,10 @@ fn render_cpu_ram_line(cpu: Option<f64>, ram: Option<f64>, _width: u16) -> Line<
     spans.push(Span::raw("  "));
 
     // RAM part with compact bar
-    spans.push(Span::styled("RAM: ", Style::default().fg(Color::Gray)));
+    spans.push(Span::styled(
+        format!("{}: ", crate::i18n::tr("dashboard-memory")),
+        Style::default().fg(Color::Gray),
+    ));
     if let Some(pct) = ram {
         let bar_width = 6;
         let filled = ((pct / 100.0) * bar_width as f64).round() as usize;
@@ -324,7 +327,10 @@ fn render_disk_uptime_line(disk: Option<f64>, uptime: &str, _width: u16) -> Line
     let mut spans = Vec::new();
 
     // Disk part with compact bar
-    spans.push(Span::styled("DSK: ", Style::default().fg(Color::Gray)));
+    spans.push(Span::styled(
+        format!("{}: ", crate::i18n::tr("dashboard-disk")),
+        Style::default().fg(Color::Gray),
+    ));
     if let Some(pct) = disk {
         let bar_width = 6;
         let filled = ((pct / 100.0) * bar_width as f64).round() as usize;
@@ -353,7 +359,7 @@ fn render_disk_uptime_line(disk: Option<f64>, uptime: &str, _width: u16) -> Line
 
     // Uptime part - no truncation, always show full uptime
     if !uptime.is_empty() {
-        let uptime_display = format!("Up: {}", uptime);
+        let uptime_display = crate::i18n::tr_args("card-up", &[("uptime", uptime.to_string())]);
         spans.push(Span::styled(
             uptime_display,
             Style::default().fg(Color::DarkGray),
@@ -455,19 +461,28 @@ fn service_info(service: &DetectedService) -> String {
 
             let total = running + stopped + restarting;
             if total == 0 {
-                return String::from("no containers");
+                return crate::i18n::tr("card-no-containers");
             }
 
             // Build status string with only non-zero counts
             let mut parts = Vec::new();
             if running > 0 {
-                parts.push(format!("{} running", running));
+                parts.push(crate::i18n::tr_args(
+                    "card-running",
+                    &[("count", running.to_string())],
+                ));
             }
             if stopped > 0 {
-                parts.push(format!("{} stopped", stopped));
+                parts.push(crate::i18n::tr_args(
+                    "card-stopped",
+                    &[("count", stopped.to_string())],
+                ));
             }
             if restarting > 0 {
-                parts.push(format!("{} restarting", restarting));
+                parts.push(crate::i18n::tr_args(
+                    "card-restarting",
+                    &[("count", restarting.to_string())],
+                ));
             }
 
             parts.join(", ")
@@ -478,11 +493,14 @@ fn service_info(service: &DetectedService) -> String {
                 if metric.name == "replication_lag_seconds" {
                     let MetricValue::Integer(lag) = metric.value;
                     if lag > 0 {
-                        return format!("repl lag {}s", lag);
+                        return crate::i18n::tr_args(
+                            "card-repl-lag",
+                            &[("seconds", lag.to_string())],
+                        );
                     }
                 }
             }
-            String::from("ok")
+            crate::i18n::tr("card-ok")
         }
         ServiceKind::Nginx => {
             // Show error count (A.4.1 format)
@@ -490,11 +508,14 @@ fn service_info(service: &DetectedService) -> String {
                 if metric.name == "recent_502_504_errors" {
                     let MetricValue::Integer(errors) = metric.value;
                     if errors > 0 {
-                        return format!("{} errors/5min", errors);
+                        return crate::i18n::tr_args(
+                            "card-errors",
+                            &[("count", errors.to_string())],
+                        );
                     }
                 }
             }
-            String::from("ok")
+            crate::i18n::tr("card-ok")
         }
         ServiceKind::Redis => {
             // Show memory usage
@@ -506,9 +527,9 @@ fn service_info(service: &DetectedService) -> String {
                 }
             }
             if mem_used > 0 {
-                format!("{}MB used", mem_used)
+                crate::i18n::tr_args("card-memory-used", &[("amount", mem_used.to_string())])
             } else {
-                String::from("ok")
+                crate::i18n::tr("card-ok")
             }
         }
         ServiceKind::NodeJS => {
@@ -521,9 +542,9 @@ fn service_info(service: &DetectedService) -> String {
                 }
             }
             if node_processes > 0 {
-                format!("{} process(es)", node_processes)
+                crate::i18n::tr_args("card-processes", &[("count", node_processes.to_string())])
             } else {
-                String::from("no processes")
+                crate::i18n::tr("card-no-processes")
             }
         }
     }
