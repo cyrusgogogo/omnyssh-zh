@@ -20,7 +20,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # The `specta` feature makes `tauri::ipc::Channel` a `specta::Type`, so the terminal
 # stream channel (§3.3/§3.6) exports through tauri-specta like any other DTO.
-tauri = { version = "2", features = ["specta", "tray-icon"] }
+tauri = { version = "2", features = ["specta", "tray-icon", "macos-private-api"] }
 sys-locale = "0.3"
 anyhow = { workspace = true }
 omnyssh-core = { path = "../omnyssh-core" }

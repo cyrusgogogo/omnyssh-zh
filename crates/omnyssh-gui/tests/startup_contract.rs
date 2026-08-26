@@ -6,6 +6,7 @@ use std::path::Path;
 
 const MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 const MAIN_RS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/main.rs"));
+const CARGO_TOML: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
 
 /// Without this attribute the binary links as a console app and Windows opens a
 /// terminal next to the window for the whole session.
@@ -37,6 +38,26 @@ fn the_window_starts_hidden_on_the_dark_background() {
         window["backgroundColor"].as_str().map(str::to_lowercase),
         Some(dark_background_token()),
         "the native window background drifted from the dark --bg token"
+    );
+}
+
+/// Tauri gates transparent webviews behind a private-API feature on macOS. The
+/// desktop card is transparent on every platform, so dropping either declaration
+/// compiles on Windows/Linux but breaks both macOS release targets.
+#[test]
+fn transparent_desktop_card_enables_macos_private_api() {
+    let config: serde_json::Value =
+        serde_json::from_str(&read(Path::new(MANIFEST_DIR).join("tauri.conf.json")))
+            .expect("tauri.conf.json is valid JSON");
+
+    assert_eq!(
+        config["app"]["macOSPrivateApi"],
+        serde_json::json!(true),
+        "transparent windows require app.macOSPrivateApi on macOS"
+    );
+    assert!(
+        CARGO_TOML.contains("\"macos-private-api\""),
+        "the tauri dependency must enable macos-private-api for transparent() to compile"
     );
 }
 
