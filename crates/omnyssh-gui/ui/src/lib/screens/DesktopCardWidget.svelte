@@ -306,6 +306,28 @@
                   {$t('desktop-card-status-locked')}
                 </span>
               {/if}
+              <div class="ml-1 flex shrink-0 items-center gap-1" data-desktop-card-host-actions>
+                <button
+                  type="button"
+                  class="grid h-6 w-6 place-items-center rounded-md bg-surface-inset text-muted transition hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-wait disabled:opacity-60"
+                  title={$t('desktop-card-open-terminal', { host: currentCard.host.name })}
+                  aria-label={$t('desktop-card-open-terminal', { host: currentCard.host.name })}
+                  disabled={actionBusy !== null}
+                  onclick={() => void openHost('terminal')}
+                >
+                  <Icon name="terminal" size={13} />
+                </button>
+                <button
+                  type="button"
+                  class="grid h-6 w-6 place-items-center rounded-md bg-surface-inset text-muted transition hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-wait disabled:opacity-60"
+                  title={$t('desktop-card-open-sftp', { host: currentCard.host.name })}
+                  aria-label={$t('desktop-card-open-sftp', { host: currentCard.host.name })}
+                  disabled={actionBusy !== null}
+                  onclick={() => void openHost('sftp')}
+                >
+                  <Icon name="sftp" size={13} />
+                </button>
+              </div>
             </div>
             <div class="truncate font-mono text-xs text-faint">
               {currentCard.host.user}@{displayHostname(currentCard.host.hostname, $streamerMode)}:{currentCard.host.port}
@@ -386,28 +408,6 @@
           {/if}
         {/if}
 
-        <div class="mt-auto grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            class="flex h-8 items-center justify-center gap-2 rounded-lg bg-accent px-3 text-xs font-medium text-accent-fg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-wait disabled:opacity-60"
-            aria-label={$t('desktop-card-open-terminal', { host: currentCard.host.name })}
-            disabled={actionBusy !== null}
-            onclick={() => void openHost('terminal')}
-          >
-            <Icon name="terminal" size={14} />
-            <span>{$t('desktop-card-terminal')}</span>
-          </button>
-          <button
-            type="button"
-            class="flex h-8 items-center justify-center gap-2 rounded-lg bg-surface-inset px-3 text-xs font-medium text-fg transition hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-wait disabled:opacity-60"
-            aria-label={$t('desktop-card-open-sftp', { host: currentCard.host.name })}
-            disabled={actionBusy !== null}
-            onclick={() => void openHost('sftp')}
-          >
-            <Icon name="sftp" size={14} />
-            <span>{$t('desktop-card-sftp')}</span>
-          </button>
-        </div>
       </div>
     {:else if !$desktopCardCompact}
       <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">

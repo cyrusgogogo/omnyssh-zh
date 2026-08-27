@@ -196,6 +196,24 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
     /background-color: var\(--status-ok\)/
   );
   await expect(page.getByText('postgres', { exact: true })).toBeVisible();
+  const terminalAction = page.getByRole('button', { name: 'Open a terminal for web-1' });
+  const sftpAction = page.getByRole('button', { name: 'Open SFTP for web-1' });
+  await expect(terminalAction).toHaveText('');
+  await expect(sftpAction).toHaveText('');
+  await expect(page.getByText('Terminal', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('SFTP', { exact: true })).toHaveCount(0);
+  const hostNameBox = await page.getByText('web-1', { exact: true }).boundingBox();
+  const hostActionsBox = await page.locator('[data-desktop-card-host-actions]').boundingBox();
+  expect(hostNameBox).not.toBeNull();
+  expect(hostActionsBox).not.toBeNull();
+  expect(hostActionsBox!.x).toBeGreaterThan(hostNameBox!.x + hostNameBox!.width);
+  expect(
+    Math.abs(
+      hostActionsBox!.y +
+        hostActionsBox!.height / 2 -
+        (hostNameBox!.y + hostNameBox!.height / 2)
+    )
+  ).toBeLessThan(6);
 
   const pin = page.getByRole('button', { name: 'Stop keeping the desktop card on top' });
   await expect(pin).toHaveAttribute('aria-pressed', 'true');
@@ -234,7 +252,8 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
     .poll(() => cardFrame.evaluate((element) => getComputedStyle(element).flexDirection))
     .toBe('column');
 
-  await page.getByRole('button', { name: 'Open a terminal for web-1' }).click();
+  await terminalAction.click();
+  await expect(webDot).toHaveAttribute('aria-pressed', 'false');
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -243,7 +262,8 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
     )
     .toEqual({ hostName: 'web-1', kind: 'terminal' });
 
-  await cardFrame.dispatchEvent('pointerleave');
+  await page.getByRole('button', { name: 'Restore the full desktop card' }).click();
+  await page.getByRole('button', { name: 'Shrink to host dots' }).click();
   await expect(cardFrame).toHaveAttribute('data-mode', 'dots');
 
   await page.evaluate(() => {
