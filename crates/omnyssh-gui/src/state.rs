@@ -16,7 +16,7 @@ use omnyssh_core::ssh::sftp::{SftpCommand, SftpManager};
 use tauri::ipc::Channel;
 use tokio::sync::mpsc;
 
-use crate::dto::{HostDto, TerminalBytes};
+use crate::dto::{ConnectionStatusDto, HostDto, HostRuntimeSnapshotDto, MetricsDto, TerminalBytes};
 
 /// Metric poll cadence. Mirrors the TUI's fixed interval; a configurable refresh
 /// interval lands with settings in Stage 4.3 (tech-gui.md §4.3).
@@ -73,6 +73,9 @@ impl SessionRegistry {
 pub struct GuiState {
     /// Cached host list, mapped to `HostDto` on demand for `list_hosts`.
     hosts: RwLock<Vec<Host>>,
+    /// Latest status/metrics owned by the backend rather than any one webview.
+    /// Secondary windows hydrate from this before listening for future events.
+    host_runtime: RwLock<HashMap<String, HostRuntimeSnapshotDto>>,
     /// Metrics/status/discovery poller; replaced on reload, dropped on exit.
     poll: Mutex<Option<PollManager>>,
     /// All terminal sessions; constructed with the raw-byte tap (§3.6).
@@ -102,6 +105,7 @@ impl GuiState {
     pub fn new(engine_tx: mpsc::Sender<CoreEvent>, pty: PtyManager) -> Self {
         Self {
             hosts: RwLock::new(Vec::new()),
+            host_runtime: RwLock::new(HashMap::new()),
             poll: Mutex::new(None),
             pty: Mutex::new(pty),
             term_channels: Mutex::new(HashMap::new()),
@@ -117,7 +121,63 @@ impl GuiState {
 
     /// Replace the host cache with a freshly loaded list.
     pub fn set_hosts(&self, hosts: Vec<Host>) {
+        let names = hosts
+            .iter()
+            .map(|host| host.name.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        self.host_runtime
+            .write()
+            .expect("host_runtime lock poisoned")
+            .retain(|name, _| names.contains(name.as_str()));
         *self.hosts.write().expect("hosts lock poisoned") = hosts;
+    }
+
+    pub fn cache_host_status(&self, host_name: String, status: ConnectionStatusDto) {
+        let mut snapshots = self
+            .host_runtime
+            .write()
+            .expect("host_runtime lock poisoned");
+        let snapshot =
+            snapshots
+                .entry(host_name.clone())
+                .or_insert_with(|| HostRuntimeSnapshotDto {
+                    host_name,
+                    status: None,
+                    metrics: None,
+                });
+        snapshot.status = Some(status);
+    }
+
+    pub fn cache_host_metrics(&self, host_name: String, metrics: MetricsDto) {
+        let mut snapshots = self
+            .host_runtime
+            .write()
+            .expect("host_runtime lock poisoned");
+        let snapshot =
+            snapshots
+                .entry(host_name.clone())
+                .or_insert_with(|| HostRuntimeSnapshotDto {
+                    host_name,
+                    status: None,
+                    metrics: None,
+                });
+        if let Some(previous) = snapshot.metrics.as_mut() {
+            merge_metrics(previous, metrics);
+        } else {
+            snapshot.metrics = Some(metrics);
+        }
+    }
+
+    pub fn host_runtime_snapshots(&self) -> Vec<HostRuntimeSnapshotDto> {
+        let mut snapshots = self
+            .host_runtime
+            .read()
+            .expect("host_runtime lock poisoned")
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        snapshots.sort_by(|left, right| left.host_name.cmp(&right.host_name));
+        snapshots
     }
 
     /// Clone the shared engine sender for a command that drives the core directly and
@@ -392,9 +452,63 @@ impl GuiState {
     }
 }
 
+fn merge_metrics(previous: &mut MetricsDto, next: MetricsDto) {
+    previous.cpu_percent = next.cpu_percent.or(previous.cpu_percent);
+    previous.ram_percent = next.ram_percent.or(previous.ram_percent);
+    previous.disk_percent = next.disk_percent.or(previous.disk_percent);
+    previous.uptime = next.uptime.or_else(|| previous.uptime.take());
+    previous.load_avg = next.load_avg.or_else(|| previous.load_avg.take());
+    previous.os_info = next.os_info.or_else(|| previous.os_info.take());
+    if !next.top_processes.is_empty() {
+        previous.top_processes = next.top_processes;
+    }
+    previous.age_seconds = next.age_seconds;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn metrics(cpu: Option<f64>, process: Option<&str>, age_seconds: u64) -> MetricsDto {
+        MetricsDto {
+            cpu_percent: cpu,
+            ram_percent: None,
+            disk_percent: None,
+            uptime: None,
+            load_avg: None,
+            os_info: None,
+            top_processes: process
+                .map(|name| {
+                    vec![crate::dto::ProcessDto {
+                        name: name.to_string(),
+                        cpu_percent: 7.5,
+                        mem_percent: 4.2,
+                    }]
+                })
+                .unwrap_or_default(),
+            age_seconds,
+        }
+    }
+
+    #[test]
+    fn runtime_snapshot_replays_status_and_merges_partial_metrics() {
+        let (engine_tx, _engine_rx) = mpsc::channel::<CoreEvent>(8);
+        let state = GuiState::new(engine_tx, PtyManager::new());
+        state.cache_host_status("web-1".into(), ConnectionStatusDto::Connected);
+        state.cache_host_metrics("web-1".into(), metrics(Some(12.0), Some("postgres"), 1));
+        state.cache_host_metrics("web-1".into(), metrics(None, None, 2));
+
+        let snapshots = state.host_runtime_snapshots();
+        assert_eq!(snapshots.len(), 1);
+        assert!(matches!(
+            snapshots[0].status,
+            Some(ConnectionStatusDto::Connected)
+        ));
+        let metrics = snapshots[0].metrics.as_ref().expect("cached metrics");
+        assert_eq!(metrics.cpu_percent, Some(12.0));
+        assert_eq!(metrics.top_processes[0].name, "postgres");
+        assert_eq!(metrics.age_seconds, 2);
+    }
 
     #[test]
     fn public_ids_are_unique_and_monotonic() {

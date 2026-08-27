@@ -494,6 +494,14 @@ async showDesktopCard() : Promise<Result<null, CommandError>> {
     else return { status: "error", error: e  as any };
 }
 },
+async getDesktopCardSnapshot() : Promise<Result<HostRuntimeSnapshotDto[], CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_desktop_card_snapshot") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async setDesktopCardAlwaysOnTop(alwaysOnTop: boolean) : Promise<Result<boolean, CommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("set_desktop_card_always_on_top", { alwaysOnTop }) };
@@ -507,9 +515,9 @@ async setDesktopCardAlwaysOnTop(alwaysOnTop: boolean) : Promise<Result<boolean, 
  * Tauri webview clips content at its native bounds, so the dot-only mode cannot be
  * implemented by hiding the expanded card with CSS alone.
  */
-async setDesktopCardCompact(compact: boolean, hostCount: number) : Promise<Result<null, CommandError>> {
+async setDesktopCardCompact(compact: boolean, hostCount: number, expandedAbove: boolean) : Promise<Result<boolean, CommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("set_desktop_card_compact", { compact, hostCount }) };
+    return { status: "ok", data: await TAURI_INVOKE("set_desktop_card_compact", { compact, hostCount, expandedAbove }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -625,6 +633,13 @@ export type HostDto = { name: string; hostname: string; user: string; port: numb
  * derives `Deserialize` (not `Serialize`).
  */
 export type HostInputDto = { name: string; hostname: string; user: string; port: number; identityFile?: string | null; password?: string | null; proxyJump?: string | null; tags: string[]; notes?: string | null; hiddenFromOverview?: boolean; monitoring?: MonitorModeDto | null; monitorPort?: number | null }
+/**
+ * Latest backend-owned runtime state for one host. New webviews (notably the
+ * desktop card) request this once before continuing with the live event stream,
+ * so they do not render an already-connected host as unknown merely because the
+ * connection event happened before that webview existed.
+ */
+export type HostRuntimeSnapshotDto = { hostName: string; status?: ConnectionStatusDto | null; metrics?: MetricsDto | null }
 /**
  * Host origin, mirrors `omnyssh_core::ssh::client::HostSource`.
  */

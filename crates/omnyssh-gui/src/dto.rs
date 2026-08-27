@@ -263,6 +263,20 @@ pub struct MetricsDto {
     pub age_seconds: u64,
 }
 
+/// Latest backend-owned runtime state for one host. New webviews (notably the
+/// desktop card) request this once before continuing with the live event stream,
+/// so they do not render an already-connected host as unknown merely because the
+/// connection event happened before that webview existed.
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct HostRuntimeSnapshotDto {
+    pub host_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<ConnectionStatusDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<MetricsDto>,
+}
+
 /// A service kind detected on a host, mirrors `omnyssh_core::event::ServiceKind`.
 /// Wire names are lowercase (`docker`, `nginx`, `postgresql`, `redis`, `nodejs`);
 /// if the core adds a kind, extend this enum so it is never silently dropped

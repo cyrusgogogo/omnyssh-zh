@@ -1,8 +1,12 @@
 //! Native window lifecycle for the compact, always-on-top dashboard card.
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, LogicalSize, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, State, WebviewUrl,
+    WebviewWindowBuilder,
+};
 
+use crate::dto::HostRuntimeSnapshotDto;
 use crate::error::CommandError;
 use crate::state::GuiState;
 
@@ -66,7 +70,8 @@ pub async fn set_desktop_card_compact(
     app: AppHandle,
     compact: bool,
     host_count: u32,
-) -> Result<(), CommandError> {
+    expanded_above: bool,
+) -> Result<bool, CommandError> {
     let window = app
         .get_webview_window(DESKTOP_CARD_WINDOW_LABEL)
         .ok_or_else(|| CommandError::new("desktop-card", "desktop card window is not open"))?;
@@ -75,15 +80,74 @@ pub async fn set_desktop_card_compact(
     } else {
         (EXPANDED_WIDTH, EXPANDED_HEIGHT)
     };
+
+    let scale = window.scale_factor().map_err(command_error)?;
+    let compact_height = logical_to_physical(DOTS_HEIGHT, scale);
+    let expanded_height = logical_to_physical(EXPANDED_HEIGHT, scale);
+    let was_compact = window.inner_size().map_err(command_error)?.height <= compact_height + 2;
+    let mut opens_above = false;
+
+    if compact && expanded_above {
+        let position = window.outer_position().map_err(command_error)?;
+        let offset = expanded_height.saturating_sub(compact_height) as i32;
+        window
+            .set_position(PhysicalPosition::new(position.x, position.y + offset))
+            .map_err(command_error)?;
+    } else if !compact && was_compact {
+        let position = window.outer_position().map_err(command_error)?;
+        if let Some(monitor) = window.current_monitor().map_err(command_error)? {
+            opens_above = should_expand_above(
+                position.y,
+                compact_height,
+                expanded_height,
+                monitor.position().y,
+                monitor.size().height,
+            );
+        }
+        if opens_above {
+            let offset = expanded_height.saturating_sub(compact_height) as i32;
+            window
+                .set_position(PhysicalPosition::new(position.x, position.y - offset))
+                .map_err(command_error)?;
+        }
+    }
     window
         .set_size(LogicalSize::new(width, height))
-        .map_err(command_error)
+        .map_err(command_error)?;
+    Ok(opens_above)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_desktop_card_snapshot(
+    state: State<'_, GuiState>,
+) -> Result<Vec<HostRuntimeSnapshotDto>, CommandError> {
+    Ok(state.host_runtime_snapshots())
 }
 
 fn compact_width(host_count: u32) -> f64 {
     // 32 px per accessible dot target plus 24 px horizontal breathing room. The
     // switcher scrolls without a visible bar when more hosts exceed the cap.
     (f64::from(host_count.max(1)) * 32.0 + 24.0).clamp(DOTS_MIN_WIDTH, DOTS_MAX_WIDTH)
+}
+
+fn logical_to_physical(value: f64, scale: f64) -> u32 {
+    (value * scale).round().max(1.0) as u32
+}
+
+fn should_expand_above(
+    window_top: i32,
+    compact_height: u32,
+    expanded_height: u32,
+    monitor_top: i32,
+    monitor_height: u32,
+) -> bool {
+    let required = i64::from(expanded_height.saturating_sub(compact_height));
+    let top_space = i64::from(window_top) - i64::from(monitor_top);
+    let monitor_bottom = i64::from(monitor_top) + i64::from(monitor_height);
+    let compact_bottom = i64::from(window_top) + i64::from(compact_height);
+    let bottom_space = monitor_bottom - compact_bottom;
+    bottom_space < required && top_space >= required
 }
 
 #[tauri::command]
@@ -173,5 +237,22 @@ mod tests {
         assert_eq!(compact_width(1), DOTS_MIN_WIDTH);
         assert_eq!(compact_width(2), 88.0);
         assert_eq!(compact_width(100), DOTS_MAX_WIDTH);
+    }
+
+    #[test]
+    fn compact_card_expands_below_by_default() {
+        assert!(!should_expand_above(120, 48, 310, 0, 1080));
+    }
+
+    #[test]
+    fn compact_card_expands_above_when_near_the_monitor_bottom() {
+        assert!(should_expand_above(1000, 48, 310, 0, 1080));
+        // Monitor coordinates can be negative in a multi-monitor layout.
+        assert!(should_expand_above(-100, 48, 310, -1080, 1080));
+    }
+
+    #[test]
+    fn compact_card_keeps_the_default_when_neither_side_has_room() {
+        assert!(!should_expand_above(100, 48, 310, 0, 240));
     }
 }

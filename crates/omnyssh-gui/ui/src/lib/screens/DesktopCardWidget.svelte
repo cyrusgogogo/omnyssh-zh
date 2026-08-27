@@ -22,6 +22,7 @@
   let lockedIndex = $state<number | null>(null);
   let pinBusy = $state(false);
   let actionBusy = $state<'terminal' | 'sftp' | null>(null);
+  let expandedAbove = $state(false);
   let resizeKey = '';
   let resizeQueue: Promise<void> = Promise.resolve();
   const selectedCards = $derived(
@@ -53,7 +54,10 @@
     if (nextKey === resizeKey) return;
     resizeKey = nextKey;
     resizeQueue = resizeQueue
-      .then(() => setDesktopCardCompact(compact, hostCount))
+      .then(async () => {
+        const opensAbove = await setDesktopCardCompact(compact, hostCount, expandedAbove);
+        expandedAbove = compact ? false : opensAbove;
+      })
       .catch((error) => lastError.set(message(error)));
   }
 
@@ -156,7 +160,10 @@
 
 <main class="h-screen overflow-hidden bg-transparent text-fg">
   <section
-    class="flex h-full flex-col overflow-hidden border-0 bg-surface-raised {dotsOnly
+    class="flex h-full overflow-hidden border-0 bg-surface-raised {$desktopCardCompact &&
+    expandedAbove
+      ? 'flex-col-reverse'
+      : 'flex-col'} {dotsOnly
       ? 'rounded-full'
       : 'rounded-2xl'}"
     data-mode={dotsOnly ? 'dots' : $desktopCardCompact ? 'compact-detail' : 'expanded'}
@@ -362,6 +369,20 @@
               {#if currentCard.uptime && currentCard.osInfo}<span class="text-faint">·</span>{/if}
               {#if currentCard.osInfo}<span class="truncate">{currentCard.osInfo}</span>{/if}
             </div>
+          {/if}
+          {#if currentCard.topProcesses.length}
+            <ul class="space-y-1 rounded-lg bg-surface-inset px-3 py-2">
+              {#each currentCard.topProcesses.slice(0, 3) as process, index (`${process.name}-${index}`)}
+                <li class="flex items-center justify-between gap-3 text-xs">
+                  <span class="min-w-0 truncate font-mono text-muted" title={process.name}
+                    >{process.name}</span
+                  >
+                  <span class="shrink-0 tabular-nums text-faint"
+                    >CPU {Math.round(process.cpuPercent)}% · MEM {Math.round(process.memPercent)}%</span
+                  >
+                </li>
+              {/each}
+            </ul>
           {/if}
         {/if}
 

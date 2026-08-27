@@ -6,6 +6,7 @@ import type {
   ConnectionStatusDto,
   FilePreview,
   HostDto,
+  HostRuntimeSnapshotDto,
   KeySetupComplete,
   KeySetupFailed,
   KeySetupProgress,
@@ -58,6 +59,17 @@ export function applyHostStatusChanged(payload: {
 
 export function applyMetricsUpdated(payload: { hostName: string; metrics: MetricsDto }): void {
   metrics.update((m) => new Map(m).set(payload.hostName, mergeMetrics(m.get(payload.hostName), payload.metrics)));
+}
+
+export function applyHostRuntimeSnapshot(payload: HostRuntimeSnapshotDto[]): void {
+  for (const snapshot of payload) {
+    if (snapshot.status) {
+      applyHostStatusChanged({ hostName: snapshot.hostName, status: snapshot.status });
+    }
+    if (snapshot.metrics) {
+      applyMetricsUpdated({ hostName: snapshot.hostName, metrics: snapshot.metrics });
+    }
+  }
 }
 
 export function applyServicesDetected(payload: { hostName: string; services: ServiceDto[] }): void {

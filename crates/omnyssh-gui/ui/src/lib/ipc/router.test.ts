@@ -12,6 +12,7 @@ import { keySetup, dismissKeySetup, beginKeySetup } from '$lib/stores/keySetup';
 import {
   applyError,
   applyHostStatusChanged,
+  applyHostRuntimeSnapshot,
   applyHostsLoaded,
   applyKeySetupComplete,
   applyKeySetupFailed,
@@ -78,6 +79,23 @@ describe('ipc event router', () => {
     });
 
     expect(get(metrics).get('web-1')?.cpuPercent).toBe(12.5);
+  });
+
+  it('hydrates status, metrics and processes from a runtime snapshot', () => {
+    applyHostRuntimeSnapshot([
+      {
+        hostName: 'web-1',
+        status: { kind: 'connected' },
+        metrics: {
+          cpuPercent: 12,
+          topProcesses: [{ name: 'postgres', cpuPercent: 7.5, memPercent: 4.2 }],
+          ageSeconds: 0
+        }
+      }
+    ]);
+
+    expect(get(statuses).get('web-1')).toEqual({ kind: 'connected' });
+    expect(get(metrics).get('web-1')?.topProcesses[0].name).toBe('postgres');
   });
 
   it('merges a partial metrics update, preserving prior fields', () => {

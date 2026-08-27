@@ -14,8 +14,8 @@ mod events;
 mod state;
 
 use commands::desktop_card::{
-    close_desktop_card, open_desktop_card_host, set_desktop_card_always_on_top,
-    set_desktop_card_compact, show_desktop_card,
+    close_desktop_card, get_desktop_card_snapshot, open_desktop_card_host,
+    set_desktop_card_always_on_top, set_desktop_card_compact, show_desktop_card,
 };
 use commands::hosts::{delete_host, list_hosts, refresh_metrics, reload_hosts, save_host};
 use commands::keysetup::start_key_setup;
@@ -212,6 +212,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             save_terminal_open_mode,
             open_system_terminal,
             show_desktop_card,
+            get_desktop_card_snapshot,
             set_desktop_card_always_on_top,
             set_desktop_card_compact,
             open_desktop_card_host,

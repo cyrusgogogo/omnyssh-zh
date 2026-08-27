@@ -8,7 +8,7 @@ use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
 use tokio::sync::mpsc;
 
-use crate::dto::{FileEntryDto, TransferProgressDto};
+use crate::dto::{ConnectionStatusDto, FileEntryDto, MetricsDto, TransferProgressDto};
 use crate::events;
 use crate::state::GuiState;
 
@@ -17,18 +17,16 @@ pub async fn forward_core_events(app: AppHandle, mut rx: mpsc::Receiver<CoreEven
         // A match with an explicit ignore arm (§3.4), grown one variant per slice.
         match event {
             CoreEvent::HostStatusChanged(host_name, status) => {
-                let _ = events::HostStatusChanged {
-                    host_name,
-                    status: (&status).into(),
-                }
-                .emit(&app);
+                let status: ConnectionStatusDto = (&status).into();
+                app.state::<GuiState>()
+                    .cache_host_status(host_name.clone(), status.clone());
+                let _ = events::HostStatusChanged { host_name, status }.emit(&app);
             }
             CoreEvent::MetricsUpdate(host_name, metrics) => {
-                let _ = events::MetricsUpdated {
-                    host_name,
-                    metrics: (&metrics).into(),
-                }
-                .emit(&app);
+                let metrics: MetricsDto = (&metrics).into();
+                app.state::<GuiState>()
+                    .cache_host_metrics(host_name.clone(), metrics.clone());
+                let _ = events::MetricsUpdated { host_name, metrics }.emit(&app);
             }
             CoreEvent::DiscoveryQuickScanDone(host_name, services) => {
                 let _ = events::ServicesDetected {

@@ -6,7 +6,8 @@
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { page } from '$app/stores';
-  import { listHosts } from '$lib/ipc/commands';
+  import { getDesktopCardSnapshot, listHosts } from '$lib/ipc/commands';
+  import { applyHostRuntimeSnapshot } from '$lib/ipc/router';
   import { hosts } from '$lib/stores/hosts';
   import { lastError } from '$lib/stores/notifications';
   import { activeEntity } from '$lib/stores/activeEntity';
@@ -28,6 +29,7 @@
       if (new URLSearchParams(window.location.search).get('view') === 'desktop-card') {
         const available = new Set(loaded.map((host) => host.name));
         desktopCardHosts.set(get(desktopCardHosts).filter((name) => available.has(name)));
+        applyHostRuntimeSnapshot(await getDesktopCardSnapshot());
       }
     } catch (err) {
       lastError.set(err instanceof Error ? err.message : String(err));

@@ -6,8 +6,8 @@ import { expect, test, type Page } from '@playwright/test';
 // `hosts-loaded` event through the same listener the app registers — so a save/delete
 // round-trips into the dashboard grid exactly as the real backend would drive it.
 const HOSTS = [
-  { name: 'web-1', hostname: 'web-1.example.com', user: 'deploy', port: 22, tags: ['prod'], source: 'manual', hasKey: true },
-  { name: 'imported', hostname: 'imported.example.com', user: 'root', port: 22, tags: [], source: 'sshConfig', hasKey: false }
+  { name: 'web-1', hostname: 'web-1.example.com', user: 'deploy', port: 22, tags: ['prod'], source: 'manual', hasKey: true, monitoring: 'ssh', hiddenFromOverview: false },
+  { name: 'imported', hostname: 'imported.example.com', user: 'root', port: 22, tags: [], source: 'sshConfig', hasKey: false, monitoring: 'ssh', hiddenFromOverview: false }
 ];
 
 async function boot(page: Page): Promise<void> {
@@ -17,13 +17,35 @@ async function boot(page: Page): Promise<void> {
       const listeners: Record<string, number[]> = {};
       const state: { hosts: Array<Record<string, unknown>> } = { hosts: hosts.map((h) => ({ ...h })) };
       const win = window as unknown as Record<string, unknown>;
+      const runtimeKey = '__omnyssh_e2e_runtime';
+
+      function rememberRuntime(event: string, payload: unknown): void {
+        if (event !== 'host-status-changed' && event !== 'metrics-updated') return;
+        const update = payload as {
+          hostName: string;
+          status?: unknown;
+          metrics?: unknown;
+        };
+        const snapshots = JSON.parse(localStorage.getItem(runtimeKey) ?? '{}') as Record<
+          string,
+          { hostName: string; status?: unknown; metrics?: unknown }
+        >;
+        const snapshot = snapshots[update.hostName] ?? { hostName: update.hostName };
+        if (update.status) snapshot.status = update.status;
+        if (update.metrics) snapshot.metrics = update.metrics;
+        snapshots[update.hostName] = snapshot;
+        localStorage.setItem(runtimeKey, JSON.stringify(snapshots));
+      }
 
       function fire(event: string, payload: unknown): void {
+        rememberRuntime(event, payload);
         for (const id of listeners[event] ?? []) {
           const cb = win[`__cb${id}`] as ((e: unknown) => void) | undefined;
           cb?.({ event, id, payload });
         }
       }
+
+      win.__fireEvent = fire;
 
       (win as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {
         invoke: (cmd: string, args: Record<string, unknown>) => {
@@ -60,7 +82,11 @@ async function boot(page: Page): Promise<void> {
               return Promise.resolve(args.alwaysOnTop);
             case 'set_desktop_card_compact':
               win.__desktopCardLayout = { ...args };
-              return Promise.resolve(null);
+              return Promise.resolve(!args.compact && win.__mockExpandAbove === true);
+            case 'get_desktop_card_snapshot':
+              return Promise.resolve(
+                Object.values(JSON.parse(localStorage.getItem(runtimeKey) ?? '{}'))
+              );
             case 'open_desktop_card_host':
               win.__desktopCardAction = { ...args };
               return Promise.resolve(null);
@@ -115,6 +141,30 @@ test('labels both dashboard host configuration sources', async ({ page }) => {
 test('desktop card keeps several hosts but displays one at a time', async ({ page }) => {
   await boot(page);
 
+  await page.evaluate(() => {
+    const fire = (window as unknown as { __fireEvent: (event: string, payload: unknown) => void })
+      .__fireEvent;
+    fire('host-status-changed', { hostName: 'web-1', status: { kind: 'connected' } });
+    fire('metrics-updated', {
+      hostName: 'web-1',
+      metrics: {
+        cpuPercent: 12,
+        ramPercent: 34,
+        diskPercent: 56,
+        uptime: '1h',
+        osInfo: 'Linux',
+        topProcesses: [
+          { name: 'postgres', cpuPercent: 7.5, memPercent: 4.2 }
+        ],
+        ageSeconds: 0
+      }
+    });
+  });
+  await expect(page.getByRole('img', { name: 'web-1 status' })).toHaveAttribute(
+    'style',
+    /background-color: var\(--status-ok\)/
+  );
+
   await page.getByRole('button', { name: 'Add web-1 to the desktop card' }).click();
   await page.getByRole('button', { name: 'Add imported to the desktop card' }).click();
   await expect(page.getByRole('button', { name: 'Desktop card (2)' })).toBeVisible();
@@ -143,8 +193,9 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
   );
   await expect(switcher.locator('span').first()).toHaveAttribute(
     'style',
-    /background-color: var\(--text-faint\)/
+    /background-color: var\(--status-ok\)/
   );
+  await expect(page.getByText('postgres', { exact: true })).toBeVisible();
 
   const pin = page.getByRole('button', { name: 'Stop keeping the desktop card on top' });
   await expect(pin).toHaveAttribute('aria-pressed', 'true');
@@ -165,7 +216,7 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
         (window as unknown as { __desktopCardLayout?: unknown }).__desktopCardLayout
       )
     )
-    .toEqual({ compact: true, hostCount: 2 });
+    .toEqual({ compact: true, hostCount: 2, expandedAbove: false });
 
   const webDot = switcher.getByRole('button', { name: 'Show and lock web-1 status' });
   await webDot.hover();
@@ -178,7 +229,10 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
         (window as unknown as { __desktopCardLayout?: unknown }).__desktopCardLayout
       )
     )
-    .toEqual({ compact: false, hostCount: 2 });
+    .toEqual({ compact: false, hostCount: 2, expandedAbove: false });
+  await expect
+    .poll(() => cardFrame.evaluate((element) => getComputedStyle(element).flexDirection))
+    .toBe('column');
 
   await page.getByRole('button', { name: 'Open a terminal for web-1' }).click();
   await expect
@@ -192,6 +246,9 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
   await cardFrame.dispatchEvent('pointerleave');
   await expect(cardFrame).toHaveAttribute('data-mode', 'dots');
 
+  await page.evaluate(() => {
+    (window as unknown as { __mockExpandAbove: boolean }).__mockExpandAbove = true;
+  });
   await switcher.getByRole('button', { name: 'Show and lock imported status' }).click();
   await cardFrame.dispatchEvent('pointerleave');
   await expect(cardFrame).toHaveAttribute('data-mode', 'compact-detail');
@@ -202,6 +259,9 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
     'true'
   );
   await expect(page.getByText('Locked', { exact: true })).toBeVisible();
+  await expect
+    .poll(() => cardFrame.evaluate((element) => getComputedStyle(element).flexDirection))
+    .toBe('column-reverse');
   await expect(page.getByText('SSH Config', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Open SFTP for imported' }).click();
   await expect
