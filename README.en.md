@@ -55,7 +55,7 @@ Its **Key management** tab manages key pairs directly under `~/.ssh`: create wit
 You add a server once. After that it sits on the dashboard as a card with live CPU, RAM and disk, uptime, distro, the top processes eating your CPU, and a badge for what runs on it. One click on `sh` drops you into a real PTY terminal. One click on `files` opens a two panel SFTP browser. Ten servers fit on one screen and refresh on their own.
 
 ### Live dashboard
-Cards for every host with CPU, RAM and disk bars, uptime, OS version, top processes, and a Docker badge showing how many containers are up. Bars turn yellow, then red, so a sick server is obvious from across the room. Add any cards to the compact desktop card when you want them outside the main window: it is draggable, optionally always on top, switches directly between hosts through top-mounted status-coloured dots, and opens that host's terminal or SFTP view directly. Shrink it to a dot-only strip when space matters; hover a dot for a temporary live-status panel, click it to lock that panel open, and launch the host's terminal or SFTP from there. If one machine has both LAN and public connection aliases, mark either address **Hide from overview** in the host editor; it remains available everywhere else.
+Cards for every host with CPU, RAM and disk bars, uptime, OS version, top processes, and a Docker badge showing how many containers are up. Bars turn yellow, then red, so a sick server is obvious from across the room. Add any cards to the compact desktop card when you want them outside the main window: it is draggable, optionally always on top, switches directly between hosts through status-coloured dots, mirrors the dashboard's top processes, and puts compact terminal/SFTP icons beside the host name. Shrink it to a dot-only strip when space matters; hover a dot for a temporary live-status panel or click it to lock that panel open. The panel opens below by default and above when the strip is near the bottom of the display. If one machine has both LAN and public connection aliases, mark either address **Hide from overview** in the host editor; it remains available everywhere else.
 
 ### Real terminals
 Full PTY sessions in tabs. Open as many servers as you need, switch between them from the sidebar, and keep them running while you work in the dashboard.
@@ -125,11 +125,11 @@ Same engine underneath: the repo is a cargo workspace where `crates/omnyssh-core
 # Install the TUI from this repository
 curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh/main/install.sh | sh -s -- --tui
 
-# Or install from the v1.0.0 source
-cargo install --git https://github.com/cyrusgogogo/omnyssh.git --tag v1.0.0 --locked --bin omny
+# Or install from the v1.0.1 source
+cargo install --git https://github.com/cyrusgogogo/omnyssh.git --tag v1.0.1 --locked --bin omny
 
 # Nix
-nix run github:cyrusgogogo/omnyssh/v1.0.0
+nix run github:cyrusgogogo/omnyssh/v1.0.1
 ```
 
 Then run `omny`. Press `a` to add a host, `/` to search, `?` for help, `Shift+K` to set up keys on the selected host.

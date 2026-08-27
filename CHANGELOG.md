@@ -7,6 +7,17 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## 1.0.1 — 2026-08-27
+
+This maintenance release makes the independent desktop card substantially more compact and keeps it consistent with the main dashboard.
+
+### Features
+- **The desktop card can shrink to a host-dot strip.** Hovering a dot temporarily reveals that host's live status, clicking locks the panel open, and compact icon actions beside the host name open its terminal or SFTP. The panel opens below by default and automatically opens above when the strip is near the bottom of its display.
+- **Desktop cards now include the dashboard's top-process list.** Up to three processes are shown with their CPU and memory usage without consuming a separate action row.
+
+### Bug Fixes
+- **Desktop-card host dots retain the dashboard's live status colour.** A newly opened card now hydrates from the backend's latest merged status and metrics snapshot, so an already-healthy green host no longer appears grey until the next poll.
+
 ## 1.0.0 — 2026-08-26 (Chinese-optimized edition)
 
 This is the first release of the independently maintained Chinese-optimized edition based on upstream OmnySSH. See [NOTICE](NOTICE) for attribution and modification details.
@@ -16,12 +27,11 @@ This is the first release of the independently maintained Chinese-optimized edit
 - **The SSH Config screen now manages key pairs under `~/.ssh`.** It can create Ed25519 or RSA-4096 pairs with the system `ssh-keygen`, load existing pairs, rename only their OmnySSH display records, copy public/private paths, and back up, restore, or delete a pair after typed-name confirmation. Private-key contents never cross the desktop IPC boundary, paths outside `~/.ssh` and symlinks are rejected, and destructive deletion always creates a restorable backup first. IdentityFile fields now select from managed keys while preserving an existing unmanaged path.
 - **The desktop app can remain in the system tray.** Closing the main window hides it; clicking the tray icon or Show restores it, and Quit in the tray menu performs the explicit full exit.
 - **Terminal actions can open in the operating system's terminal.** Settings offers the existing embedded terminal or Windows Terminal, macOS Terminal, and the Linux system terminal. Imported SSH-config hosts launch by alias so their full OpenSSH policy is retained, while OmnySSH hosts pass their address, port, identity, jump-host and cipher options without exposing saved passwords.
-- **Dashboard hosts can be kept in a compact desktop card.** Add one or more hosts from the overview, drag the independent card anywhere, and choose whether it stays above other windows. It shows one live host card at a time, including the overview's top-process list, switches directly through dots coloured by each host's dashboard status, and remembers the selected hosts across launches. Compact icon actions beside the host name open its terminal or SFTP without consuming a full action row. The card can also shrink into a dot-only strip: hover a host dot for a temporary live-status view or click it to lock the view open. Hover details open below by default and automatically open above when the strip is near the bottom of its display.
+- **Dashboard hosts can be kept in a compact desktop card.** Add one or more hosts from the overview, drag the independent card anywhere, and choose whether it stays above other windows. It shows one live host card at a time, switches directly through top-mounted dots coloured by each host's dashboard status, and remembers the selected hosts across launches.
 - **The desktop and terminal apps now support Simplified Chinese.** New installs follow the operating-system language, while existing installs remain in English until changed. The desktop selector lives under Settings → Appearance; the TUI uses `Shift+L`, `[ui].language`, or the session-only `--language` option. SSH terminal output, command results, host names, and paths remain untouched.
 - **Connection aliases can be hidden from the overview.** This is useful when a single machine has separate LAN and public addresses. Hidden hosts remain available to Terminal, SFTP, snippets, and the command palette; the overview can temporarily reveal them for editing. The TUI uses `Shift+H` to reveal hidden hosts.
 
 ### Bug Fixes
-- **Desktop-card host dots now retain the overview's live status colour.** Opening the independent card after a host had already connected used to miss the earlier status and metrics events, leaving a healthy green host grey until another poll. The backend now supplies every new desktop-card webview with its latest merged runtime snapshot, including top processes, before live updates continue.
 - **Transparent desktop-card windows now compile in macOS release bundles.** Tauri gates its transparent webview builder behind the `macos-private-api` feature on macOS; both the Cargo feature and matching app configuration are now explicit and covered by a release-contract test.
 - **The desktop card now has working native pin feedback and direct connection actions.** Its pin button reflects the window manager's actual always-on-top state instead of changing only a subtle icon colour. Terminal and SFTP buttons bring the main window forward and open the selected host there, while the redundant title, source badge, delete shortcut, rectangular native shadow, CSS shadow, and transparent outer gutter have been removed for clean edge-to-edge rounded chrome.
 - **GUI scrollbars now match the application chrome and stay out of the way.** Scroll tracks, arrow buttons and resting thumbs are transparent; a compact semantic-colour thumb appears only while its pane is actively scrolling, then hides again after movement stops. Wheel, touchpad and keyboard scrolling remain native.

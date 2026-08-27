@@ -22,7 +22,18 @@ fn main() {
         let mut buf = Vec::new();
         man.render(&mut buf).expect("Failed to render man page");
 
-        fs::write(out_dir.join("omny.1"), buf).expect("Failed to write man page");
+        // clap_mangen can leave spaces at the end of generated header/synopsis
+        // lines. Keep the committed manual deterministic and friendly to the
+        // repository's whitespace checks across dependency/toolchain updates.
+        let rendered = String::from_utf8(buf).expect("Man page must be UTF-8");
+        let normalized = rendered
+            .lines()
+            .map(str::trim_end)
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+
+        fs::write(out_dir.join("omny.1"), normalized).expect("Failed to write man page");
     }
 
     println!("cargo:rerun-if-changed=src/cli.rs");
