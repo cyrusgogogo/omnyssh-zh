@@ -1,7 +1,7 @@
 //! Native window lifecycle for the compact, always-on-top dashboard card.
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::error::CommandError;
 use crate::state::GuiState;
@@ -11,6 +11,11 @@ pub const DESKTOP_CARD_WINDOW_LABEL: &str = "desktop-card";
 // Including `index.html` works only for packaged assets; SvelteKit dev has no such route.
 const DESKTOP_CARD_APP_PATH: &str = "?view=desktop-card";
 const OPEN_HOST_EVENT: &str = "desktop-card-open-host";
+const EXPANDED_WIDTH: f64 = 380.0;
+const EXPANDED_HEIGHT: f64 = 310.0;
+const DOTS_HEIGHT: f64 = 48.0;
+const DOTS_MIN_WIDTH: f64 = 72.0;
+const DOTS_MAX_WIDTH: f64 = EXPANDED_WIDTH;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,8 +40,8 @@ pub async fn show_desktop_card(app: AppHandle) -> Result<(), CommandError> {
         WebviewUrl::App(DESKTOP_CARD_APP_PATH.into()),
     )
     .title("OmnySSH Desktop Card")
-    .inner_size(380.0, 310.0)
-    .min_inner_size(320.0, 270.0)
+    .inner_size(EXPANDED_WIDTH, EXPANDED_HEIGHT)
+    .min_inner_size(DOTS_MIN_WIDTH, DOTS_HEIGHT)
     .resizable(false)
     .decorations(false)
     .transparent(true)
@@ -50,6 +55,35 @@ pub async fn show_desktop_card(app: AppHandle) -> Result<(), CommandError> {
     .build()
     .map_err(command_error)?;
     Ok(())
+}
+
+/// Resize the native window as well as changing the webview layout. A transparent
+/// Tauri webview clips content at its native bounds, so the dot-only mode cannot be
+/// implemented by hiding the expanded card with CSS alone.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_desktop_card_compact(
+    app: AppHandle,
+    compact: bool,
+    host_count: u32,
+) -> Result<(), CommandError> {
+    let window = app
+        .get_webview_window(DESKTOP_CARD_WINDOW_LABEL)
+        .ok_or_else(|| CommandError::new("desktop-card", "desktop card window is not open"))?;
+    let (width, height) = if compact {
+        (compact_width(host_count), DOTS_HEIGHT)
+    } else {
+        (EXPANDED_WIDTH, EXPANDED_HEIGHT)
+    };
+    window
+        .set_size(LogicalSize::new(width, height))
+        .map_err(command_error)
+}
+
+fn compact_width(host_count: u32) -> f64 {
+    // 32 px per accessible dot target plus 24 px horizontal breathing room. The
+    // switcher scrolls without a visible bar when more hosts exceed the cap.
+    (f64::from(host_count.max(1)) * 32.0 + 24.0).clamp(DOTS_MIN_WIDTH, DOTS_MAX_WIDTH)
 }
 
 #[tauri::command]
@@ -131,5 +165,13 @@ mod tests {
     #[test]
     fn desktop_card_host_actions_use_a_stable_main_window_event() {
         assert_eq!(OPEN_HOST_EVENT, "desktop-card-open-host");
+    }
+
+    #[test]
+    fn compact_desktop_card_width_tracks_hosts_with_safe_bounds() {
+        assert_eq!(compact_width(0), DOTS_MIN_WIDTH);
+        assert_eq!(compact_width(1), DOTS_MIN_WIDTH);
+        assert_eq!(compact_width(2), 88.0);
+        assert_eq!(compact_width(100), DOTS_MAX_WIDTH);
     }
 }

@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 
 const HOSTS_KEY = 'omnyssh-desktop-card-hosts';
 const PINNED_KEY = 'omnyssh-desktop-card-pinned';
+const COMPACT_KEY = 'omnyssh-desktop-card-compact';
 
 export function normalizeDesktopCardHosts(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -35,6 +36,14 @@ function readPinned(): boolean {
     return localStorage.getItem(PINNED_KEY) !== 'false';
   } catch {
     return true;
+  }
+}
+
+function readCompact(): boolean {
+  try {
+    return localStorage.getItem(COMPACT_KEY) === 'true';
+  } catch {
+    return false;
   }
 }
 
@@ -96,5 +105,33 @@ function createDesktopCardPinned() {
   };
 }
 
+function createDesktopCardCompact() {
+  let current = readCompact();
+  const { subscribe, set: setStore } = writable(current);
+
+  function apply(value: boolean, persist: boolean): void {
+    current = value;
+    setStore(value);
+    if (persist) {
+      try {
+        localStorage.setItem(COMPACT_KEY, String(value));
+      } catch {
+        // Keep the in-memory preference if persistence is unavailable.
+      }
+    }
+  }
+
+  return {
+    subscribe,
+    set: (value: boolean) => apply(value, true),
+    toggle(): boolean {
+      apply(!current, true);
+      return current;
+    },
+    syncFromStorage: () => apply(readCompact(), false)
+  };
+}
+
 export const desktopCardHosts = createDesktopCardHosts();
 export const desktopCardPinned = createDesktopCardPinned();
+export const desktopCardCompact = createDesktopCardCompact();

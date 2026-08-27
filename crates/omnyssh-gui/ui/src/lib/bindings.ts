@@ -503,6 +503,19 @@ async setDesktopCardAlwaysOnTop(alwaysOnTop: boolean) : Promise<Result<boolean, 
 }
 },
 /**
+ * Resize the native window as well as changing the webview layout. A transparent
+ * Tauri webview clips content at its native bounds, so the dot-only mode cannot be
+ * implemented by hiding the expanded card with CSS alone.
+ */
+async setDesktopCardCompact(compact: boolean, hostCount: number) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_desktop_card_compact", { compact, hostCount }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Bring the main window forward and ask it to open the selected host. Sessions
  * must live in the main webview: creating one in the compact card would leave an
  * invisible terminal/SFTP tab behind when the card closes.

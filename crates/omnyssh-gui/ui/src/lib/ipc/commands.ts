@@ -98,6 +98,11 @@ export async function setDesktopCardAlwaysOnTop(alwaysOnTop: boolean): Promise<b
   return res.data;
 }
 
+export async function setDesktopCardCompact(compact: boolean, hostCount: number): Promise<void> {
+  const res = await commands.setDesktopCardCompact(compact, hostCount);
+  if (res.status === 'error') throw new Error(formatCommandError(res.error));
+}
+
 export async function openDesktopCardHost(
   hostName: string,
   kind: 'terminal' | 'sftp'

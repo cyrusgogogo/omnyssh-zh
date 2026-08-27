@@ -55,6 +55,10 @@
   {:else if name === 'expand'}
     <polyline points="11 7 16 12 11 17" />
     <polyline points="6 7 11 12 6 17" />
+  {:else if name === 'minimize'}
+    <line x1="5" y1="18" x2="19" y2="18" />
+  {:else if name === 'maximize'}
+    <rect x="5" y="5" width="14" height="14" rx="2" />
   {:else if name === 'check'}
     <polyline points="20 6 9 17 4 12" />
   {:else if name === 'play'}

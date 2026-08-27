@@ -58,6 +58,9 @@ async function boot(page: Page): Promise<void> {
               return Promise.resolve(null);
             case 'set_desktop_card_always_on_top':
               return Promise.resolve(args.alwaysOnTop);
+            case 'set_desktop_card_compact':
+              win.__desktopCardLayout = { ...args };
+              return Promise.resolve(null);
             case 'open_desktop_card_host':
               win.__desktopCardAction = { ...args };
               return Promise.resolve(null);
@@ -116,6 +119,7 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
   await page.getByRole('button', { name: 'Add imported to the desktop card' }).click();
   await expect(page.getByRole('button', { name: 'Desktop card (2)' })).toBeVisible();
 
+  await page.setViewportSize({ width: 380, height: 310 });
   await page.goto('/?view=desktop-card');
   await expect(page.getByText('Desktop card', { exact: true })).toHaveCount(0);
   await expect(page.getByText('web-1', { exact: true })).toBeVisible();
@@ -151,6 +155,31 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
     'false'
   );
 
+  await page.getByRole('button', { name: 'Shrink to host dots' }).click();
+  await expect(cardFrame).toHaveAttribute('data-mode', 'dots');
+  await expect(page.getByText('web-1', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('imported', { exact: true })).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as unknown as { __desktopCardLayout?: unknown }).__desktopCardLayout
+      )
+    )
+    .toEqual({ compact: true, hostCount: 2 });
+
+  const webDot = switcher.getByRole('button', { name: 'Show and lock web-1 status' });
+  await webDot.hover();
+  await expect(cardFrame).toHaveAttribute('data-mode', 'compact-detail');
+  await expect(page.getByText('web-1', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open a terminal for web-1' })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as unknown as { __desktopCardLayout?: unknown }).__desktopCardLayout
+      )
+    )
+    .toEqual({ compact: false, hostCount: 2 });
+
   await page.getByRole('button', { name: 'Open a terminal for web-1' }).click();
   await expect
     .poll(() =>
@@ -160,13 +189,19 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
     )
     .toEqual({ hostName: 'web-1', kind: 'terminal' });
 
-  await switcher.getByRole('button', { name: 'Switch to imported' }).click();
+  await cardFrame.dispatchEvent('pointerleave');
+  await expect(cardFrame).toHaveAttribute('data-mode', 'dots');
+
+  await switcher.getByRole('button', { name: 'Show and lock imported status' }).click();
+  await cardFrame.dispatchEvent('pointerleave');
+  await expect(cardFrame).toHaveAttribute('data-mode', 'compact-detail');
   await expect(page.getByText('imported', { exact: true })).toBeVisible();
   await expect(page.getByText('web-1', { exact: true })).toHaveCount(0);
-  await expect(switcher.getByRole('button', { name: 'Switch to imported' })).toHaveAttribute(
-    'aria-current',
+  await expect(switcher.getByRole('button', { name: 'Unlock imported status' })).toHaveAttribute(
+    'aria-pressed',
     'true'
   );
+  await expect(page.getByText('Locked', { exact: true })).toBeVisible();
   await expect(page.getByText('SSH Config', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Open SFTP for imported' }).click();
   await expect
@@ -176,6 +211,13 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
       )
     )
     .toEqual({ hostName: 'imported', kind: 'sftp' });
+
+  await page.getByRole('button', { name: 'Restore the full desktop card' }).click();
+  await expect(cardFrame).toHaveAttribute('data-mode', 'expanded');
+  await expect(switcher.getByRole('button', { name: 'Switch to imported' })).toHaveAttribute(
+    'aria-current',
+    'true'
+  );
 });
 
 test('scrollbars stay hidden until their pane is scrolling', async ({ page }) => {

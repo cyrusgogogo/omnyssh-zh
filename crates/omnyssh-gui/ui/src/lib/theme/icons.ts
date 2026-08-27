@@ -12,6 +12,8 @@ export type IconName =
   | 'close'
   | 'collapse'
   | 'expand'
+  | 'minimize'
+  | 'maximize'
   | 'check'
   | 'play'
   | 'edit'
