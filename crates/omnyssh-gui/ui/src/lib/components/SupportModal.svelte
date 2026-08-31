@@ -19,8 +19,8 @@
     {
       icon: 'star',
       titleKey: 'support-github',
-      locator: 'github.com/cyrusgogogo/omnyssh',
-      url: 'https://github.com/cyrusgogogo/omnyssh'
+      locator: 'github.com/cyrusgogogo/omnyssh-zh',
+      url: 'https://github.com/cyrusgogogo/omnyssh-zh'
     },
     {
       icon: 'telegram',

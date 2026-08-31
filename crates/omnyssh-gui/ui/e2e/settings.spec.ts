@@ -11,7 +11,7 @@ const HOSTS = [
 
 const UPDATE = {
   version: '2.0.0',
-  url: 'https://github.com/cyrusgogogo/omnyssh/releases/tag/v2.0.0',
+  url: 'https://github.com/cyrusgogogo/omnyssh-zh/releases/tag/v2.0.0',
   tag: 'v2.0.0',
   canSelfUpdate: true
 };

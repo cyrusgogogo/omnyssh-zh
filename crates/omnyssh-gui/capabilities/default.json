@@ -11,8 +11,8 @@
     {
       "identifier": "opener:allow-open-url",
       "allow": [
-        { "url": "https://github.com/cyrusgogogo/omnyssh" },
-        { "url": "https://github.com/cyrusgogogo/omnyssh/releases/*" },
+        { "url": "https://github.com/cyrusgogogo/omnyssh-zh" },
+        { "url": "https://github.com/cyrusgogogo/omnyssh-zh/releases/*" },
         { "url": "https://t.me/timhartmanndev" }
       ]
     }

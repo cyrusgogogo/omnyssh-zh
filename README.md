@@ -6,11 +6,11 @@
 
 <img src="assets/gui.webp" alt="OmnySSH GUI 概览" width="900">
 
-[![Downloads](https://img.shields.io/github/downloads/cyrusgogogo/omnyssh/total?label=total%20installs&color=2ea44f)](https://github.com/cyrusgogogo/omnyssh/releases)
-[![Latest release](https://img.shields.io/github/v/release/cyrusgogogo/omnyssh?label=latest)](https://github.com/cyrusgogogo/omnyssh/releases/latest)
-[![Stars](https://img.shields.io/github/stars/cyrusgogogo/omnyssh?style=flat)](https://github.com/cyrusgogogo/omnyssh/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/cyrusgogogo/omnyssh-zh/total?label=total%20installs&color=2ea44f)](https://github.com/cyrusgogogo/omnyssh-zh/releases)
+[![Latest release](https://img.shields.io/github/v/release/cyrusgogogo/omnyssh-zh?label=latest)](https://github.com/cyrusgogogo/omnyssh-zh/releases/latest)
+[![Stars](https://img.shields.io/github/stars/cyrusgogogo/omnyssh-zh?style=flat)](https://github.com/cyrusgogogo/omnyssh-zh/stargazers)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Build](https://img.shields.io/github/actions/workflow/status/cyrusgogogo/omnyssh/ci.yml?branch=main)](https://github.com/cyrusgogogo/omnyssh/actions)
+[![Build](https://img.shields.io/github/actions/workflow/status/cyrusgogogo/omnyssh-zh/ci.yml?branch=main)](https://github.com/cyrusgogogo/omnyssh-zh/actions)
 
 **简体中文** | [English](README.en.md)
 
@@ -26,10 +26,10 @@
 macOS 和 Linux 使用一条命令安装：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh-zh/main/install.sh | sh
 ```
 
-脚本会检测操作系统和架构，并安装本仓库的最新桌面版：macOS 安装到 `/Applications`，Linux 添加到应用菜单。只需要终端版或希望同时安装两者时，使用 `curl … | sh -s -- --tui` 或 `--both`。也可以从 [Releases](https://github.com/cyrusgogogo/omnyssh/releases/latest) 手动下载。
+脚本会检测操作系统和架构，并安装本仓库的最新桌面版：macOS 安装到 `/Applications`，Linux 添加到应用菜单。只需要终端版或希望同时安装两者时，使用 `curl … | sh -s -- --tui` 或 `--both`。也可以从 [Releases](https://github.com/cyrusgogogo/omnyssh-zh/releases/latest) 手动下载。
 
 | 平台 | 文件 |
 |---|---|
@@ -129,18 +129,18 @@ OmnySSH 最初是终端应用，TUI 版本仍在维护并持续发布。
 
 ```bash
 # 使用本仓库安装脚本安装 TUI
-curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh/main/install.sh | sh -s -- --tui
+curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh-zh/main/install.sh | sh -s -- --tui
 
-# 或从 v1.0.2 源码安装
-cargo install --git https://github.com/cyrusgogogo/omnyssh.git --tag v1.0.2 --locked --bin omny
+# 或从 v1.0.3 源码安装
+cargo install --git https://github.com/cyrusgogogo/omnyssh-zh.git --tag v1.0.3 --locked --bin omny
 
 # Nix
-nix run github:cyrusgogogo/omnyssh/v1.0.2
+nix run github:cyrusgogogo/omnyssh-zh/v1.0.3
 ```
 
 运行 `omny`。按 `a` 添加主机、`/` 搜索、`?` 查看帮助、`Shift+K` 配置 SSH 密钥、`Shift+L` 选择语言。
 
-Linux、macOS、Windows 和 Termux 的预编译 TUI 位于 [Releases](https://github.com/cyrusgogogo/omnyssh/releases) 的 `omny-*` 文件。配置目录分别为 Linux 的 `~/.config/omnyssh/`、macOS 的 `~/Library/Application Support/omnyssh/` 和 Windows 的 `%APPDATA%\omnyssh\`。TUI 启动时只读 `~/.ssh/config`；只有桌面端用户明确确认的 SSH 配置流程才会安装上述托管 Include。
+Linux、macOS、Windows 和 Termux 的预编译 TUI 位于 [Releases](https://github.com/cyrusgogogo/omnyssh-zh/releases) 的 `omny-*` 文件。配置目录分别为 Linux 的 `~/.config/omnyssh/`、macOS 的 `~/Library/Application Support/omnyssh/` 和 Windows 的 `%APPDATA%\omnyssh\`。TUI 启动时只读 `~/.ssh/config`；只有桌面端用户明确确认的 SSH 配置流程才会安装上述托管 Include。
 
 完整选项、快捷键和配置说明请运行 `man omny`；中文手册可用 `man -L zh_CN omny` 查看。
 
@@ -172,8 +172,8 @@ crates/omnyssh-gui    Tauri 桌面应用
 
 ### ⭐ 如果 OmnySSH 帮你少开了一个终端标签页，欢迎点亮 Star
 
-[报告问题](https://github.com/cyrusgogogo/omnyssh/issues) •
-[提出功能建议](https://github.com/cyrusgogogo/omnyssh/issues) •
-[参与讨论](https://github.com/cyrusgogogo/omnyssh/discussions)
+[报告问题](https://github.com/cyrusgogogo/omnyssh-zh/issues) •
+[提出功能建议](https://github.com/cyrusgogogo/omnyssh-zh/issues) •
+[参与讨论](https://github.com/cyrusgogogo/omnyssh-zh/discussions)
 
 </div>

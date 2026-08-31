@@ -31,7 +31,7 @@ development workflow, coding conventions, and review process.
 **Clone and build:**
 
 ```bash
-git clone https://github.com/cyrusgogogo/omnyssh.git
+git clone https://github.com/cyrusgogogo/omnyssh-zh.git
 cd omnyssh
 cargo build
 ```

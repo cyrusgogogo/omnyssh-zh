@@ -1,6 +1,6 @@
 #!/bin/sh
 # OmnySSH installation script
-# Usage: curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh/main/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh-zh/main/install.sh | sh
 
 set -e
 
@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # GitHub repository
-REPO="cyrusgogogo/omnyssh"
+REPO="cyrusgogogo/omnyssh-zh"
 BINARY_NAME="omny"
 
 # Print colored messages

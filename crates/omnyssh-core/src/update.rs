@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use tar::Archive;
 
 /// GitHub repository that hosts OmnySSH releases.
-const REPO: &str = "cyrusgogogo/omnyssh";
+const REPO: &str = "cyrusgogogo/omnyssh-zh";
 /// Timeout applied to every network request the updater makes.
 const HTTP_TIMEOUT: Duration = Duration::from_secs(8);
 /// Target triple this binary was built for (provided by `build.rs`).
@@ -67,7 +67,7 @@ impl InstallMethod {
             Self::Manual => None,
             Self::Homebrew => Some("brew upgrade omnyssh"),
             Self::Cargo => Some(
-                "cargo install --git https://github.com/cyrusgogogo/omnyssh.git --locked --bin omny --force",
+                "cargo install --git https://github.com/cyrusgogogo/omnyssh-zh.git --locked --bin omny --force",
             ),
             Self::Nix => Some("nix profile upgrade omnyssh"),
         }
@@ -336,6 +336,29 @@ mod tests {
         assert!(InstallMethod::Homebrew.upgrade_command().is_some());
         assert!(InstallMethod::Cargo.upgrade_command().is_some());
         assert!(InstallMethod::Nix.upgrade_command().is_some());
+    }
+
+    #[test]
+    fn update_links_target_the_distribution_repository() {
+        assert_eq!(REPO, "cyrusgogogo/omnyssh-zh");
+        assert_eq!(
+            InstallMethod::Cargo.upgrade_command(),
+            Some(
+                "cargo install --git https://github.com/cyrusgogogo/omnyssh-zh.git --locked --bin omny --force"
+            )
+        );
+
+        let info = UpdateInfo {
+            current: "1.0.2".to_string(),
+            latest: "1.0.3".to_string(),
+            tag: "v1.0.3".to_string(),
+            method: InstallMethod::Manual,
+            can_self_update: true,
+        };
+        assert_eq!(
+            info.release_url(),
+            "https://github.com/cyrusgogogo/omnyssh-zh/releases/tag/v1.0.3"
+        );
     }
 
     #[test]

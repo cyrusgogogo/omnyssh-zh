@@ -9,6 +9,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 1.0.3 — 2026-08-31
+
+This patch release moves the independently maintained Chinese edition's update, download, installation, support, and contribution links to its current `omnyssh-zh` repository.
+
+### Bug Fixes
+- **Update checks and self-updates now use the current distribution repository.** The TUI and desktop app query `cyrusgogogo/omnyssh-zh` for the latest release, open that repository's release page, and download update archives and checksums from it instead of the previous repository.
+
+### Documentation
+- Updated the installer, Cargo and Nix commands, release badges, support links, contribution instructions, and repository metadata to consistently target `cyrusgogogo/omnyssh-zh`.
+
 ## 1.0.2 — 2026-08-31
 
 This patch release makes desktop-card terminal launches follow the configured terminal mode without unnecessarily opening the main application window.

@@ -8,7 +8,7 @@ import { applyUpdateAvailable } from '$lib/ipc/router';
 
 const info: UpdateInfoDto = {
   version: '1.2.0',
-  url: 'https://github.com/cyrusgogogo/omnyssh/releases/tag/v1.2.0',
+  url: 'https://github.com/cyrusgogogo/omnyssh-zh/releases/tag/v1.2.0',
   tag: 'v1.2.0',
   canSelfUpdate: true
 };

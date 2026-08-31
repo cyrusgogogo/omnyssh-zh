@@ -6,11 +6,11 @@
 
 <img src="assets/gui.webp" alt="OmnySSH GUI dashboard" width="900">
 
-[![Downloads](https://img.shields.io/github/downloads/cyrusgogogo/omnyssh/total?label=total%20installs&color=2ea44f)](https://github.com/cyrusgogogo/omnyssh/releases)
-[![Latest release](https://img.shields.io/github/v/release/cyrusgogogo/omnyssh?label=latest)](https://github.com/cyrusgogogo/omnyssh/releases/latest)
-[![Stars](https://img.shields.io/github/stars/cyrusgogogo/omnyssh?style=flat)](https://github.com/cyrusgogogo/omnyssh/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/cyrusgogogo/omnyssh-zh/total?label=total%20installs&color=2ea44f)](https://github.com/cyrusgogogo/omnyssh-zh/releases)
+[![Latest release](https://img.shields.io/github/v/release/cyrusgogogo/omnyssh-zh?label=latest)](https://github.com/cyrusgogogo/omnyssh-zh/releases/latest)
+[![Stars](https://img.shields.io/github/stars/cyrusgogogo/omnyssh-zh?style=flat)](https://github.com/cyrusgogogo/omnyssh-zh/stargazers)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Build](https://img.shields.io/github/actions/workflow/status/cyrusgogogo/omnyssh/ci.yml?branch=main)](https://github.com/cyrusgogogo/omnyssh/actions)
+[![Build](https://img.shields.io/github/actions/workflow/status/cyrusgogogo/omnyssh-zh/ci.yml?branch=main)](https://github.com/cyrusgogogo/omnyssh-zh/actions)
 
 [简体中文](README.md) | **English**
 
@@ -30,10 +30,10 @@
 One command on macOS and Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh-zh/main/install.sh | sh
 ```
 
-The script detects your OS and architecture and installs the latest desktop build from this repository — into `/Applications` on macOS, your app menu on Linux. Want the terminal app instead, or both? `curl … | sh -s -- --tui` (or `--both`). Prefer clicking? Grab the file for your platform from [**Releases**](https://github.com/cyrusgogogo/omnyssh/releases/latest).
+The script detects your OS and architecture and installs the latest desktop build from this repository — into `/Applications` on macOS, your app menu on Linux. Want the terminal app instead, or both? `curl … | sh -s -- --tui` (or `--both`). Prefer clicking? Grab the file for your platform from [**Releases**](https://github.com/cyrusgogogo/omnyssh-zh/releases/latest).
 
 | Platform | File |
 |----------|------|
@@ -123,18 +123,18 @@ Same engine underneath: the repo is a cargo workspace where `crates/omnyssh-core
 
 ```bash
 # Install the TUI from this repository
-curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh/main/install.sh | sh -s -- --tui
+curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh-zh/main/install.sh | sh -s -- --tui
 
-# Or install from the v1.0.2 source
-cargo install --git https://github.com/cyrusgogogo/omnyssh.git --tag v1.0.2 --locked --bin omny
+# Or install from the v1.0.3 source
+cargo install --git https://github.com/cyrusgogogo/omnyssh-zh.git --tag v1.0.3 --locked --bin omny
 
 # Nix
-nix run github:cyrusgogogo/omnyssh/v1.0.2
+nix run github:cyrusgogogo/omnyssh-zh/v1.0.3
 ```
 
 Then run `omny`. Press `a` to add a host, `/` to search, `?` for help, `Shift+K` to set up keys on the selected host.
 
-Prebuilt TUI binaries for Linux, macOS, Windows and Termux live on the [Releases](https://github.com/cyrusgogogo/omnyssh/releases) page under the `omny-*` files. Config sits in `~/.config/omnyssh/` on Linux, `~/Library/Application Support/omnyssh/` on macOS, `%APPDATA%\omnyssh\` on Windows. The TUI reads `~/.ssh/config` and never writes it; only the desktop's explicit SSH Config workflow can install the managed Include described above.
+Prebuilt TUI binaries for Linux, macOS, Windows and Termux live on the [Releases](https://github.com/cyrusgogogo/omnyssh-zh/releases) page under the `omny-*` files. Config sits in `~/.config/omnyssh/` on Linux, `~/Library/Application Support/omnyssh/` on macOS, `%APPDATA%\omnyssh\` on Windows. The TUI reads `~/.ssh/config` and never writes it; only the desktop's explicit SSH Config workflow can install the managed Include described above.
 
 Full options, keybindings and config examples: `man omny`.
 
@@ -168,8 +168,8 @@ Distributed under the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NO
 
 ### ⭐ Star the repo if OmnySSH saved you a terminal tab
 
-[Report a bug](https://github.com/cyrusgogogo/omnyssh/issues) •
-[Request a feature](https://github.com/cyrusgogogo/omnyssh/issues) •
-[Discussions](https://github.com/cyrusgogogo/omnyssh/discussions)
+[Report a bug](https://github.com/cyrusgogogo/omnyssh-zh/issues) •
+[Request a feature](https://github.com/cyrusgogogo/omnyssh-zh/issues) •
+[Discussions](https://github.com/cyrusgogogo/omnyssh-zh/discussions)
 
 </div>
