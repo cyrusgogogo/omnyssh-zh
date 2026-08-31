@@ -524,9 +524,9 @@ async setDesktopCardCompact(compact: boolean, hostCount: number, expandedAbove: 
 }
 },
 /**
- * Bring the main window forward and ask it to open the selected host. Sessions
- * must live in the main webview: creating one in the compact card would leave an
- * invisible terminal/SFTP tab behind when the card closes.
+ * Open the selected host without creating sessions in the compact-card webview.
+ * System-terminal actions can launch directly; embedded terminals and SFTP must
+ * live in the main webview so closing the card cannot leave an invisible tab.
  */
 async openDesktopCardHost(hostName: string, kind: string) : Promise<Result<null, CommandError>> {
     try {

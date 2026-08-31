@@ -22,6 +22,7 @@
   let lockedIndex = $state<number | null>(null);
   let pinBusy = $state(false);
   let actionBusy = $state<'terminal' | 'sftp' | null>(null);
+  let actionError = $state<string | null>(null);
   let expandedAbove = $state(false);
   let resizeKey = '';
   let resizeQueue: Promise<void> = Promise.resolve();
@@ -111,11 +112,20 @@
 
   async function openHost(kind: 'terminal' | 'sftp'): Promise<void> {
     if (!currentCard) return;
+    const hostName = currentCard.host.name;
     actionBusy = kind;
+    actionError = null;
     try {
-      await openDesktopCardHost(currentCard.host.name, kind);
+      await openDesktopCardHost(hostName, kind);
     } catch (error) {
-      lastError.set(message(error));
+      const detail = message(error);
+      if ($desktopCardCompact) {
+        const currentHostIndex = selectedCards.findIndex((card) => card.host.name === hostName);
+        if (currentHostIndex >= 0) lockedIndex = currentHostIndex;
+        else desktopCardCompact.set(false);
+      }
+      actionError = detail;
+      lastError.set(detail);
     } finally {
       actionBusy = null;
     }
@@ -160,7 +170,7 @@
 
 <main class="h-screen overflow-hidden bg-transparent text-fg">
   <section
-    class="flex h-full overflow-hidden border-0 bg-surface-raised {$desktopCardCompact &&
+    class="relative flex h-full overflow-hidden border-0 bg-surface-raised {$desktopCardCompact &&
     expandedAbove
       ? 'flex-col-reverse'
       : 'flex-col'} {dotsOnly
@@ -287,19 +297,19 @@
       </div>
     {/if}
 
-    {#if currentCard}
+    {#each currentCard ? [currentCard] : [] as card (card.host.name)}
       <div class="flex min-h-0 flex-1 flex-col gap-3 p-4">
         <div class="flex min-w-0 items-start gap-2.5">
           <span class="mt-1 shrink-0">
             <StatusDot
-              status={currentCard.overall}
+              status={card.overall}
               size={9}
-              label={$t('dashboard-host-status', { host: currentCard.host.name })}
+              label={$t('dashboard-host-status', { host: card.host.name })}
             />
           </span>
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 items-center gap-2">
-              <span class="truncate font-semibold" title={currentCard.host.name}>{currentCard.host.name}</span>
+              <span class="truncate font-semibold" title={card.host.name}>{card.host.name}</span>
               {#if lockedIndex === detailIndex}
                 <span class="flex shrink-0 items-center gap-1 text-[10px] text-faint">
                   <Icon name="pin" size={10} />
@@ -310,8 +320,8 @@
                 <button
                   type="button"
                   class="grid h-6 w-6 place-items-center rounded-md bg-surface-inset text-muted transition hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-wait disabled:opacity-60"
-                  title={$t('desktop-card-open-terminal', { host: currentCard.host.name })}
-                  aria-label={$t('desktop-card-open-terminal', { host: currentCard.host.name })}
+                  title={$t('desktop-card-open-terminal', { host: card.host.name })}
+                  aria-label={$t('desktop-card-open-terminal', { host: card.host.name })}
                   disabled={actionBusy !== null}
                   onclick={() => void openHost('terminal')}
                 >
@@ -320,8 +330,8 @@
                 <button
                   type="button"
                   class="grid h-6 w-6 place-items-center rounded-md bg-surface-inset text-muted transition hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-wait disabled:opacity-60"
-                  title={$t('desktop-card-open-sftp', { host: currentCard.host.name })}
-                  aria-label={$t('desktop-card-open-sftp', { host: currentCard.host.name })}
+                  title={$t('desktop-card-open-sftp', { host: card.host.name })}
+                  aria-label={$t('desktop-card-open-sftp', { host: card.host.name })}
                   disabled={actionBusy !== null}
                   onclick={() => void openHost('sftp')}
                 >
@@ -330,7 +340,7 @@
               </div>
             </div>
             <div class="truncate font-mono text-xs text-faint">
-              {currentCard.host.user}@{displayHostname(currentCard.host.hostname, $streamerMode)}:{currentCard.host.port}
+              {card.host.user}@{displayHostname(card.host.hostname, $streamerMode)}:{card.host.port}
             </div>
           </div>
           {#if $desktopCardCompact}
@@ -355,20 +365,20 @@
           {/if}
         </div>
 
-        {#if currentCard.reachability}
+        {#if card.reachability}
           <div
             class="rounded-lg bg-surface-inset px-3 py-4 text-center text-xs"
-            style="color: {statusToken(currentCard.overall)};"
+            style="color: {statusToken(card.overall)};"
           >
-            {$t(`desktop-card-${currentCard.reachability}`)}
+            {$t(`desktop-card-${card.reachability}`)}
           </div>
-        {:else if currentCard.offline}
+        {:else if card.offline}
           <div class="rounded-lg bg-surface-inset px-3 py-4 text-center text-xs text-faint">
             {$t('dashboard-status-offline')}
           </div>
         {:else}
           <div class="space-y-2.5">
-            {#each currentCard.metricRows as row (row.label)}
+            {#each card.metricRows as row (row.label)}
               <div class="flex items-center gap-3">
                 <span class="w-9 shrink-0 text-[11px] uppercase tracking-wider text-faint">{row.label}</span>
                 <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-inset">
@@ -385,16 +395,16 @@
               </div>
             {/each}
           </div>
-          {#if currentCard.uptime || currentCard.osInfo}
+          {#if card.uptime || card.osInfo}
             <div class="flex min-w-0 items-center gap-2 text-xs text-muted">
-              {#if currentCard.uptime}<span>{$t('dashboard-up-for', { uptime: currentCard.uptime })}</span>{/if}
-              {#if currentCard.uptime && currentCard.osInfo}<span class="text-faint">·</span>{/if}
-              {#if currentCard.osInfo}<span class="truncate">{currentCard.osInfo}</span>{/if}
+              {#if card.uptime}<span>{$t('dashboard-up-for', { uptime: card.uptime })}</span>{/if}
+              {#if card.uptime && card.osInfo}<span class="text-faint">·</span>{/if}
+              {#if card.osInfo}<span class="truncate">{card.osInfo}</span>{/if}
             </div>
           {/if}
-          {#if currentCard.topProcesses.length}
+          {#if card.topProcesses.length}
             <ul class="space-y-1 rounded-lg bg-surface-inset px-3 py-2">
-              {#each currentCard.topProcesses.slice(0, 3) as process, index (`${process.name}-${index}`)}
+              {#each card.topProcesses.slice(0, 3) as process, index (`${process.name}-${index}`)}
                 <li class="flex items-center justify-between gap-3 text-xs">
                   <span class="min-w-0 truncate font-mono text-muted" title={process.name}
                     >{process.name}</span
@@ -409,11 +419,34 @@
         {/if}
 
       </div>
-    {:else if !$desktopCardCompact}
-      <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-        <Icon name="desktop-card" size={24} />
-        <p class="text-sm font-medium">{$t('desktop-card-empty')}</p>
-        <p class="text-xs text-faint">{$t('desktop-card-empty-description')}</p>
+    {:else}
+      {#if !$desktopCardCompact}
+        <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+          <Icon name="desktop-card" size={24} />
+          <p class="text-sm font-medium">{$t('desktop-card-empty')}</p>
+          <p class="text-xs text-faint">{$t('desktop-card-empty-description')}</p>
+        </div>
+      {/if}
+    {/each}
+
+    {#if actionError}
+      <div
+        class="absolute left-3 right-3 z-20 flex max-h-24 items-start gap-2 overflow-auto rounded-lg border border-status-crit/40 bg-surface-raised p-2 shadow-lg {$desktopCardCompact &&
+        expandedAbove
+          ? 'bottom-14'
+          : 'bottom-3'}"
+        role="alert"
+      >
+        <span class="min-w-0 flex-1 break-words text-xs text-status-crit">{actionError}</span>
+        <button
+          type="button"
+          class="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted transition hover:bg-surface-inset hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          title={$t('common-close')}
+          aria-label={$t('common-close')}
+          onclick={() => (actionError = null)}
+        >
+          <Icon name="close" size={12} />
+        </button>
       </div>
     {/if}
   </section>

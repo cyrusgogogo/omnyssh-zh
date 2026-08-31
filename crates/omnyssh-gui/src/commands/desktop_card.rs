@@ -1,11 +1,14 @@
 //! Native window lifecycle for the compact, always-on-top dashboard card.
 
+use std::future::Future;
+
 use serde::Serialize;
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, State, WebviewUrl,
     WebviewWindowBuilder,
 };
 
+use super::settings::{load_terminal_open_mode, open_system_terminal};
 use crate::dto::HostRuntimeSnapshotDto;
 use crate::error::CommandError;
 use crate::state::GuiState;
@@ -26,6 +29,35 @@ const DOTS_MAX_WIDTH: f64 = EXPANDED_WIDTH;
 struct OpenHostPayload {
     host_name: String,
     kind: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum DesktopCardHostTarget {
+    MainWindow,
+    SystemTerminal,
+}
+
+fn desktop_card_host_target(kind: &str, terminal_open_mode: &str) -> DesktopCardHostTarget {
+    if kind == "terminal" && terminal_open_mode == "system" {
+        DesktopCardHostTarget::SystemTerminal
+    } else {
+        DesktopCardHostTarget::MainWindow
+    }
+}
+
+async fn dispatch_desktop_card_host_target<SystemAction, MainWindowAction>(
+    target: DesktopCardHostTarget,
+    system_action: SystemAction,
+    main_window_action: MainWindowAction,
+) -> Result<(), CommandError>
+where
+    SystemAction: Future<Output = Result<(), CommandError>>,
+    MainWindowAction: Future<Output = Result<(), CommandError>>,
+{
+    match target {
+        DesktopCardHostTarget::SystemTerminal => system_action.await,
+        DesktopCardHostTarget::MainWindow => main_window_action.await,
+    }
 }
 
 #[tauri::command]
@@ -165,9 +197,9 @@ pub async fn set_desktop_card_always_on_top(
     window.is_always_on_top().map_err(command_error)
 }
 
-/// Bring the main window forward and ask it to open the selected host. Sessions
-/// must live in the main webview: creating one in the compact card would leave an
-/// invisible terminal/SFTP tab behind when the card closes.
+/// Open the selected host without creating sessions in the compact-card webview.
+/// System-terminal actions can launch directly; embedded terminals and SFTP must
+/// live in the main webview so closing the card cannot leave an invisible tab.
 #[tauri::command]
 #[specta::specta]
 pub async fn open_desktop_card_host(
@@ -189,14 +221,28 @@ pub async fn open_desktop_card_host(
         ));
     }
 
-    let main = app
-        .get_webview_window("main")
-        .ok_or_else(|| CommandError::new("desktop-card", "main window is not available"))?;
-    main.show().map_err(command_error)?;
-    main.unminimize().map_err(command_error)?;
-    main.set_focus().map_err(command_error)?;
-    main.emit(OPEN_HOST_EVENT, OpenHostPayload { host_name, kind })
-        .map_err(command_error)
+    let target = if kind == "terminal" {
+        let mode = load_terminal_open_mode().await?;
+        desktop_card_host_target(&kind, &mode)
+    } else {
+        DesktopCardHostTarget::MainWindow
+    };
+    let system_host_name = host_name.clone();
+    dispatch_desktop_card_host_target(
+        target,
+        open_system_terminal(state, system_host_name),
+        async move {
+            let main = app
+                .get_webview_window("main")
+                .ok_or_else(|| CommandError::new("desktop-card", "main window is not available"))?;
+            main.show().map_err(command_error)?;
+            main.unminimize().map_err(command_error)?;
+            main.set_focus().map_err(command_error)?;
+            main.emit(OPEN_HOST_EVENT, OpenHostPayload { host_name, kind })
+                .map_err(command_error)
+        },
+    )
+    .await
 }
 
 #[tauri::command]
@@ -214,6 +260,8 @@ fn command_error(error: impl ToString) -> CommandError {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use super::*;
 
     #[test]
@@ -229,6 +277,45 @@ mod tests {
     #[test]
     fn desktop_card_host_actions_use_a_stable_main_window_event() {
         assert_eq!(OPEN_HOST_EVENT, "desktop-card-open-host");
+    }
+
+    #[test]
+    fn desktop_card_routes_system_terminal_only_for_terminal_actions() {
+        assert_eq!(
+            desktop_card_host_target("terminal", "system"),
+            DesktopCardHostTarget::SystemTerminal
+        );
+        assert_eq!(
+            desktop_card_host_target("terminal", "default"),
+            DesktopCardHostTarget::MainWindow
+        );
+        assert_eq!(
+            desktop_card_host_target("sftp", "system"),
+            DesktopCardHostTarget::MainWindow
+        );
+    }
+
+    #[tokio::test]
+    async fn desktop_card_system_terminal_bypasses_the_main_window() {
+        let system_calls = Cell::new(0);
+        let main_window_calls = Cell::new(0);
+
+        dispatch_desktop_card_host_target(
+            DesktopCardHostTarget::SystemTerminal,
+            async {
+                system_calls.set(system_calls.get() + 1);
+                Ok(())
+            },
+            async {
+                main_window_calls.set(main_window_calls.get() + 1);
+                Ok(())
+            },
+        )
+        .await
+        .expect("system terminal action should succeed");
+
+        assert_eq!(system_calls.get(), 1);
+        assert_eq!(main_window_calls.get(), 0);
     }
 
     #[test]

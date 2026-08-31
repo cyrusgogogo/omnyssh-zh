@@ -89,6 +89,17 @@ async function boot(page: Page): Promise<void> {
               );
             case 'open_desktop_card_host':
               win.__desktopCardAction = { ...args };
+              if (win.__desktopCardActionError) {
+                return new Promise((_, reject) => {
+                  win.__rejectDesktopCardAction = () => {
+                    delete win.__rejectDesktopCardAction;
+                    reject({
+                      code: 'system-terminal',
+                      rawDetail: String(win.__desktopCardActionError)
+                    });
+                  };
+                });
+              }
               return Promise.resolve(null);
             case 'plugin:event|listen': {
               const { event, handler } = args as { event: string; handler: number };
@@ -139,6 +150,8 @@ test('labels both dashboard host configuration sources', async ({ page }) => {
 });
 
 test('desktop card keeps several hosts but displays one at a time', async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
   await boot(page);
 
   await page.evaluate(() => {
@@ -252,8 +265,45 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
     .poll(() => cardFrame.evaluate((element) => getComputedStyle(element).flexDirection))
     .toBe('column');
 
+  await page.evaluate(() => {
+    (window as unknown as { __desktopCardActionError: string }).__desktopCardActionError =
+      'Mock system terminal unavailable';
+  });
   await terminalAction.click();
+  await cardFrame.dispatchEvent('pointerleave');
+  await page.evaluate(() => {
+    localStorage.setItem('omnyssh-desktop-card-hosts', JSON.stringify(['imported', 'web-1']));
+  });
+  await expect
+    .poll(() =>
+      switcher
+        .getByRole('button')
+        .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label')))
+    )
+    .toEqual(['Show and lock imported status', 'Show and lock web-1 status']);
+  await page.evaluate(() => {
+    (
+      window as unknown as { __rejectDesktopCardAction?: () => void }
+    ).__rejectDesktopCardAction?.();
+  });
+  const actionError = page.getByRole('alert');
+  await expect(actionError).toContainText('Mock system terminal unavailable');
+  await expect(cardFrame).toHaveAttribute('data-mode', 'compact-detail');
+  const lockedWebDot = switcher.getByRole('button', { name: 'Unlock web-1 status' });
+  await expect(lockedWebDot).toHaveAttribute('aria-pressed', 'true');
+  await actionError.getByRole('button', { name: 'Close' }).click();
+  await expect(actionError).toHaveCount(0);
+  await page.evaluate(() => {
+    delete (window as unknown as { __desktopCardActionError?: string }).__desktopCardActionError;
+    delete (window as unknown as { __desktopCardAction?: unknown }).__desktopCardAction;
+  });
+  await expect(terminalAction).toBeEnabled();
+  await lockedWebDot.click();
   await expect(webDot).toHaveAttribute('aria-pressed', 'false');
+
+  await webDot.click();
+  await expect(terminalAction).toBeVisible();
+  await terminalAction.click();
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -298,6 +348,7 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
     'aria-current',
     'true'
   );
+  expect(pageErrors).toEqual([]);
 });
 
 test('scrollbars stay hidden until their pane is scrolling', async ({ page }) => {

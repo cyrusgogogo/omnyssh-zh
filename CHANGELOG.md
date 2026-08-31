@@ -7,6 +7,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## Unreleased
+
+### Bug Fixes
+- **Desktop-card terminal actions now respect the configured terminal mode without revealing the main window.** With system-terminal mode selected, the card launches the host directly in the operating system terminal. The default embedded terminal and SFTP actions continue to open in the OmnySSH main window.
+
 ## 1.0.1 — 2026-08-27
 
 This maintenance release makes the independent desktop card substantially more compact and keeps it consistent with the main dashboard.
