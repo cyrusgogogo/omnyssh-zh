@@ -131,11 +131,11 @@ OmnySSH 最初是终端应用，TUI 版本仍在维护并持续发布。
 # 使用本仓库安装脚本安装 TUI
 curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh/main/install.sh | sh -s -- --tui
 
-# 或从 v1.0.1 源码安装
-cargo install --git https://github.com/cyrusgogogo/omnyssh.git --tag v1.0.1 --locked --bin omny
+# 或从 v1.0.2 源码安装
+cargo install --git https://github.com/cyrusgogogo/omnyssh.git --tag v1.0.2 --locked --bin omny
 
 # Nix
-nix run github:cyrusgogogo/omnyssh/v1.0.1
+nix run github:cyrusgogogo/omnyssh/v1.0.2
 ```
 
 运行 `omny`。按 `a` 添加主机、`/` 搜索、`?` 查看帮助、`Shift+K` 配置 SSH 密钥、`Shift+L` 选择语言。

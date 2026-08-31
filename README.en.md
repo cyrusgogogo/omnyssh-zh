@@ -125,11 +125,11 @@ Same engine underneath: the repo is a cargo workspace where `crates/omnyssh-core
 # Install the TUI from this repository
 curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh/main/install.sh | sh -s -- --tui
 
-# Or install from the v1.0.1 source
-cargo install --git https://github.com/cyrusgogogo/omnyssh.git --tag v1.0.1 --locked --bin omny
+# Or install from the v1.0.2 source
+cargo install --git https://github.com/cyrusgogogo/omnyssh.git --tag v1.0.2 --locked --bin omny
 
 # Nix
-nix run github:cyrusgogogo/omnyssh/v1.0.1
+nix run github:cyrusgogogo/omnyssh/v1.0.2
 ```
 
 Then run `omny`. Press `a` to add a host, `/` to search, `?` for help, `Shift+K` to set up keys on the selected host.
