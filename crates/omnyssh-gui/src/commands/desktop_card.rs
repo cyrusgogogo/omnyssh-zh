@@ -116,32 +116,37 @@ pub async fn set_desktop_card_compact(
     let scale = window.scale_factor().map_err(command_error)?;
     let compact_height = logical_to_physical(DOTS_HEIGHT, scale);
     let expanded_height = logical_to_physical(EXPANDED_HEIGHT, scale);
-    let was_compact = window.inner_size().map_err(command_error)?.height <= compact_height + 2;
+    let target_width = logical_to_physical(width, scale);
+    let current_size = window.inner_size().map_err(command_error)?;
+    let was_compact = current_size.height <= compact_height + 2;
     let mut opens_above = false;
 
-    if compact && expanded_above {
+    if compact || was_compact {
         let position = window.outer_position().map_err(command_error)?;
-        let offset = expanded_height.saturating_sub(compact_height) as i32;
+        if !compact {
+            if let Some(monitor) = window.current_monitor().map_err(command_error)? {
+                opens_above = should_expand_above(
+                    position.y,
+                    compact_height,
+                    expanded_height,
+                    monitor.position().y,
+                    monitor.size().height,
+                );
+            }
+        }
+        let target_y = if compact && expanded_above {
+            position.y + expanded_height.saturating_sub(compact_height) as i32
+        } else if opens_above {
+            position.y - expanded_height.saturating_sub(compact_height) as i32
+        } else {
+            position.y
+        };
         window
-            .set_position(PhysicalPosition::new(position.x, position.y + offset))
+            .set_position(PhysicalPosition::new(
+                anchored_window_left(position.x, current_size.width, target_width),
+                target_y,
+            ))
             .map_err(command_error)?;
-    } else if !compact && was_compact {
-        let position = window.outer_position().map_err(command_error)?;
-        if let Some(monitor) = window.current_monitor().map_err(command_error)? {
-            opens_above = should_expand_above(
-                position.y,
-                compact_height,
-                expanded_height,
-                monitor.position().y,
-                monitor.size().height,
-            );
-        }
-        if opens_above {
-            let offset = expanded_height.saturating_sub(compact_height) as i32;
-            window
-                .set_position(PhysicalPosition::new(position.x, position.y - offset))
-                .map_err(command_error)?;
-        }
     }
     window
         .set_size(LogicalSize::new(width, height))
@@ -165,6 +170,10 @@ fn compact_width(host_count: u32) -> f64 {
 
 fn logical_to_physical(value: f64, scale: f64) -> u32 {
     (value * scale).round().max(1.0) as u32
+}
+
+fn anchored_window_left(window_left: i32, current_width: u32, target_width: u32) -> i32 {
+    window_left + (current_width as i32 - target_width as i32) / 2
 }
 
 fn should_expand_above(
@@ -341,5 +350,11 @@ mod tests {
     #[test]
     fn compact_card_keeps_the_default_when_neither_side_has_room() {
         assert!(!should_expand_above(100, 48, 310, 0, 240));
+    }
+
+    #[test]
+    fn resizing_the_card_keeps_the_host_dots_horizontally_anchored() {
+        assert_eq!(anchored_window_left(300, 152, 380), 186);
+        assert_eq!(anchored_window_left(186, 380, 152), 300);
     }
 }

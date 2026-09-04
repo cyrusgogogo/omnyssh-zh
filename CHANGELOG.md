@@ -9,6 +9,9 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Bug Fixes
+- **Desktop-card host dots stay anchored while hover details open and close.** Resizing the native card window now compensates for the width change, preventing the centred host-dot strip from jumping sideways.
+
 ## 1.0.3 — 2026-08-31
 
 This patch release moves the independently maintained Chinese edition's update, download, installation, support, and contribution links to its current `omnyssh-zh` repository.
