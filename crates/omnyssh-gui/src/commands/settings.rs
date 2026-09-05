@@ -199,6 +199,7 @@ mod tests {
         let host = Host {
             name: "legacy-db".into(),
             hostname: "legacy.example.com".into(),
+            user: "root".into(),
             ..Host::default()
         };
         let rendered = windows_terminal_args(&host, system_ssh_args(&host))
