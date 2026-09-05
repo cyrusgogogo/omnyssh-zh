@@ -25,6 +25,9 @@ jobs:
       - name: Exercise the guard on fixtures
         run: bash scripts/hygiene-guard.test.sh
 
+      - name: Test automatic version preparation
+        run: node --test scripts/prepare-release.test.mjs
+
   build-and-test:
     name: Build & Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -188,3 +191,45 @@ jobs:
             echo "GUI leaked into the bare build"; exit 1
           fi
           echo "OK: bare build produced omny, excluded OmnySSH, needed no Node."
+
+  auto-release:
+    name: Prepare automatic patch release
+    needs: [hygiene, build-and-test, gui, tui-build-independence]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    concurrency:
+      group: auto-release-main
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: 22
+      - name: Prepare and dispatch release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --tags
+          # A newer push owns the next release; never publish an obsolete CI result.
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo 'A newer main commit exists; skipping this release.'
+            exit 0
+          fi
+          tag=$(node scripts/prepare-release.mjs)
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Cargo.toml Cargo.lock crates/omnyssh/Cargo.toml CHANGELOG.md README.md README.en.md doc/omny.1 doc/zh_CN/omny.1
+          git commit -m "chore(release): prepare $tag"
+          git tag -a "$tag" -m "OmnySSH $tag"
+          git push --atomic origin HEAD:refs/heads/main "refs/tags/$tag"
+          # GITHUB_TOKEN pushes do not trigger workflows. Dispatch on the tag explicitly.
+          gh workflow run release.yml --ref "$tag"
+          echo "Release started for $tag" >> "$GITHUB_STEP_SUMMARY"

@@ -124,6 +124,7 @@ fn launch_system_terminal(host: &Host) -> std::io::Result<()> {
     }
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn windows_terminal_args(host: &Host, ssh_args: Vec<OsString>) -> Vec<OsString> {
     [
         OsString::from("new-tab"),

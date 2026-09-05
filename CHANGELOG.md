@@ -9,7 +9,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Automation
+- Successful main-branch CI runs now prepare a patch version and trigger the cross-platform GitHub Release automatically.
+
 ### Bug Fixes
+- Fixed Linux GUI CI by compiling the Windows terminal argument helper only on Windows or in tests.
 - **Desktop-card host dots stay anchored while hover details open and close.** Resizing the native card window now compensates for the width change, preventing the centred host-dot strip from jumping sideways.
 
 ## 1.0.3 — 2026-08-31

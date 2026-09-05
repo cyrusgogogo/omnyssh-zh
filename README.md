@@ -164,6 +164,10 @@ crates/omnyssh        TUI 应用（可执行文件：omny）
 crates/omnyssh-gui    Tauri 桌面应用
 ```
 
+## 自动发布
+
+推送 `main` 后，全部 CI 检查成功会自动递增补丁版本（例如 `1.0.3` → `1.0.4`），将 `CHANGELOG.md` 的 Unreleased 内容转为发布说明，并创建标签、构建各平台安装包和发布 GitHub Release。失败的检查不会触发发布。自动提交会更新远端 `main`，下次开发前请先 `git pull --ff-only`。如果打包失败，在 Actions 中重新运行对应 Release；也可选择该版本标签手动运行 Release，勿移动已公开的标签。
+
 ## 许可证
 
 本项目依据 Apache License 2.0 分发，详见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。本发行版包含对上游 OmnySSH 的修改；贡献者提交代码即表示同意按同一许可证提供其贡献。
