@@ -131,11 +131,11 @@ OmnySSH 最初是终端应用，TUI 版本仍在维护并持续发布。
 # 使用本仓库安装脚本安装 TUI
 curl -fsSL https://raw.githubusercontent.com/cyrusgogogo/omnyssh-zh/main/install.sh | sh -s -- --tui
 
-# 或从 v1.0.3 源码安装
-cargo install --git https://github.com/cyrusgogogo/omnyssh-zh.git --tag v1.0.3 --locked --bin omny
+# 或从 v1.0.4 源码安装
+cargo install --git https://github.com/cyrusgogogo/omnyssh-zh.git --tag v1.0.4 --locked --bin omny
 
 # Nix
-nix run github:cyrusgogogo/omnyssh-zh/v1.0.3
+nix run github:cyrusgogogo/omnyssh-zh/v1.0.4
 ```
 
 运行 `omny`。按 `a` 添加主机、`/` 搜索、`?` 查看帮助、`Shift+K` 配置 SSH 密钥、`Shift+L` 选择语言。
@@ -166,7 +166,7 @@ crates/omnyssh-gui    Tauri 桌面应用
 
 ## 自动发布
 
-推送 `main` 后，全部 CI 检查成功会自动递增补丁版本（例如 `1.0.3` → `1.0.4`），将 `CHANGELOG.md` 的 Unreleased 内容转为发布说明，并创建标签、构建各平台安装包和发布 GitHub Release。失败的检查不会触发发布。自动提交会更新远端 `main`，下次开发前请先 `git pull --ff-only`。如果打包失败，在 Actions 中重新运行对应 Release；也可选择该版本标签手动运行 Release，勿移动已公开的标签。
+推送 `main` 后，全部 CI 检查成功会自动递增补丁版本（例如 `1.0.4` → `1.0.4`），将 `CHANGELOG.md` 的 Unreleased 内容转为发布说明，并创建标签、构建各平台安装包和发布 GitHub Release。失败的检查不会触发发布。自动提交会更新远端 `main`，下次开发前请先 `git pull --ff-only`。如果打包失败，在 Actions 中重新运行对应 Release；也可选择该版本标签手动运行 Release，勿移动已公开的标签。
 
 ## 许可证
 

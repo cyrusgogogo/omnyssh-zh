@@ -9,6 +9,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 1.0.4 — 2026-09-05
+
 ### Automation
 - Successful main-branch CI runs now prepare a patch version and trigger the cross-platform GitHub Release automatically.
 
