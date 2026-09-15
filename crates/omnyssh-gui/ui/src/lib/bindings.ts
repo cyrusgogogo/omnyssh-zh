@@ -374,6 +374,22 @@ async previewSshConfig(hosts: ManagedSshHostDto[]) : Promise<Result<SshConfigPre
     else return { status: "error", error: e  as any };
 }
 },
+async previewHostSshConfig(input: HostInputDto) : Promise<Result<SshHostWritePreviewDto, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("preview_host_ssh_config", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async writeHostSshConfig(input: HostInputDto, expectedFingerprint: string, confirmNonKey: boolean) : Promise<Result<SshHostWriteReportDto, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("write_host_ssh_config", { input, expectedFingerprint, confirmNonKey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async applySshConfig(hosts: ManagedSshHostDto[], expectedMainHash: string, expectedManagedHash: string, allowMissingSsh: boolean) : Promise<Result<SshApplyReportDto, CommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("apply_ssh_config", { hosts, expectedMainHash, expectedManagedHash, allowMissingSsh }) };
@@ -769,6 +785,8 @@ export type SshConfigPreviewDto = { mainHash: string; managedHash: string; mainD
 export type SshConfigSnapshotDto = { mainPath: string; managedPath: string; installed: boolean; writable: boolean; mainHash: string; managedHash: string; hosts: ManagedSshHostDto[]; sources: SshSourceFileDto[]; diagnostics: SshDiagnosticDto[]; backups: SshBackupDto[] }
 export type SshDiagnosticDto = { severity: SshDiagnosticSeverityDto; code: string; message: string; path: string | null; line: number | null }
 export type SshDiagnosticSeverityDto = "info" | "warning" | "blocking"
+export type SshHostWritePreviewDto = { alias: string; targetPath: string; existing: boolean; diff: string; fingerprint: string; requiresKeyWarning: boolean }
+export type SshHostWriteReportDto = { backupPath: string; sshValidation: string }
 export type SshKeyBackupDto = { id: string; keyId: string; name: string }
 export type SshKeyRecordDto = { id: string; name: string; privatePath: string; publicPath: string; keyType: string; available: boolean }
 export type SshKeySnapshotDto = { records: SshKeyRecordDto[]; discovered: DiscoveredSshKeyDto[]; backups: SshKeyBackupDto[] }

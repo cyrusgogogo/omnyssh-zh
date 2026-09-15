@@ -9,6 +9,9 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Features
+- Added **Write to SSH Config** to the dashboard editor for existing OmnySSH-config hosts. The explicit preview updates a uniquely matched original alias in place (including static Include sources), or adds a missing host to the main config, preserving unrelated directives and comments. Non-key/password configurations require a warning acknowledgement; passwords are never exported. Writes validate effective settings with system SSH, guard against stale previews, create private single-file backups, and keep `hosts.toml` independent.
+
 ## 1.0.4 — 2026-09-05
 
 ### Automation

@@ -52,6 +52,23 @@ async function boot(page: Page): Promise<void> {
           switch (cmd) {
             case 'list_hosts':
               return Promise.resolve([...state.hosts]);
+            case 'get_ssh_key_snapshot':
+              return Promise.resolve({ records: [], discovered: [], backups: [] });
+            case 'preview_host_ssh_config': {
+              const input = args.input as { name: string; hostname: string; password?: string };
+              win.__sshPreviewInput = input;
+              return Promise.resolve({
+                alias: input.name, targetPath: '/test/home/.ssh/config',
+                existing: !win.__sshNewHost, diff: `- HostName old\n+ HostName ${input.hostname}\n`,
+                fingerprint: 'review-fingerprint', requiresKeyWarning: !!input.password
+              });
+            }
+            case 'write_host_ssh_config':
+              win.__sshWriteInput = args;
+              if (win.__sshWriteFailure) {
+                return Promise.reject({ code: 'ssh-config', args: {}, rawDetail: 'SSH configuration changed after preview; preview again' });
+              }
+              return Promise.resolve({ backupPath: '/test/home/.ssh/.omnyssh-host-backups/one', sshValidation: 'ssh -G' });
             case 'reload_hosts':
               // The real command reloads + restarts pollers, then broadcasts the list.
               setTimeout(() => fire('hosts-loaded', [...state.hosts]), 0);
@@ -391,6 +408,85 @@ test('edits a manual host in place', async ({ page }) => {
 
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('deploy@web-1b.example.com:22')).toBeVisible();
+});
+
+test('SSH write is available only when editing an existing manual host', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: 'Add OmnySSH host' }).click();
+  await expect(page.getByRole('button', { name: 'Write to SSH Config' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit imported' }).click();
+  await expect(page.getByRole('button', { name: 'Write to SSH Config' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit web-1' }).click();
+  await expect(page.getByRole('button', { name: 'Write to SSH Config' })).toBeVisible();
+});
+
+test('previews current IP, writes with its fingerprint and keeps software settings independent', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: 'Edit web-1' }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit host' });
+  await editor.getByLabel('Hostname / IP').fill('192.168.1.20');
+  await editor.getByRole('button', { name: 'Write to SSH Config' }).click();
+  await expect(editor).toContainText('existing configuration will be updated');
+  await expect(editor).toContainText('/test/home/.ssh/config');
+  await expect(editor).toContainText('+ HostName 192.168.1.20');
+  await expect.poll(() => page.evaluate(() => (window as unknown as Record<string, unknown>).__sshWriteInput)).toBeUndefined();
+  await editor.getByRole('button', { name: 'Confirm and write' }).click();
+  await expect(editor.getByRole('status')).toContainText('Written to SSH Config');
+  const written = await page.evaluate(() => (window as unknown as { __sshWriteInput: { input: { hostname: string }; expectedFingerprint: string } }).__sshWriteInput);
+  expect(written.input.hostname).toBe('192.168.1.20');
+  expect(written.expectedFingerprint).toBe('review-fingerprint');
+  await expect(editor.getByLabel('Hostname / IP')).toHaveValue('192.168.1.20');
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByText('deploy@web-1.example.com:22')).toBeVisible();
+});
+
+test('a password host requires acknowledging the warning before a new SSH entry is written', async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => { (window as unknown as Record<string, unknown>).__sshNewHost = true; });
+  await page.getByRole('button', { name: 'Edit web-1' }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit host' });
+  await editor.getByLabel('Password', { exact: true }).fill('not-for-ssh-config');
+  await editor.getByRole('button', { name: 'Write to SSH Config' }).click();
+  await expect(editor).toContainText('A new entry will be added');
+  await expect(editor).toContainText('SSH Config does not store passwords');
+  await expect(editor.locator('pre')).not.toContainText('not-for-ssh-config');
+  const confirm = editor.getByRole('button', { name: 'Confirm and write' });
+  await expect(confirm).toBeDisabled();
+  await editor.getByRole('checkbox').check();
+  await confirm.click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __sshWriteInput: { confirmNonKey: boolean } }).__sshWriteInput?.confirmNonKey)).toBe(true);
+});
+
+test('failed SSH writes retain the form and allow a fresh preview', async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => { (window as unknown as Record<string, unknown>).__sshWriteFailure = true; });
+  await page.getByRole('button', { name: 'Edit web-1' }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit host' });
+  await editor.getByLabel('Hostname / IP').fill('192.168.1.21');
+  await editor.getByRole('button', { name: 'Write to SSH Config' }).click();
+  await editor.getByRole('button', { name: 'Confirm and write' }).click();
+  await expect(editor.getByRole('alert')).toContainText('changed after preview');
+  await expect(editor.getByRole('status')).toHaveCount(0);
+  await editor.getByRole('button', { name: 'Back to editing' }).click();
+  await expect(editor.getByLabel('Hostname / IP')).toHaveValue('192.168.1.21');
+  await editor.getByRole('button', { name: 'Write to SSH Config' }).click();
+  await expect(editor.getByRole('alert')).toHaveCount(0);
+});
+
+test('shows the SSH write review and login warning in Chinese', async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem('omnyssh-language', 'zh-CN'));
+  await boot(page);
+  await page.getByRole('button', { name: '编辑 web-1' }).click();
+  const editor = page.getByRole('dialog');
+  await editor.getByLabel('主机名 / IP').fill('192.168.1.20');
+  await editor.getByLabel('密码', { exact: true }).fill('not-exported');
+  await editor.getByRole('button', { name: '写入 SSH Config' }).click();
+  await expect(editor).toContainText('已找到别名');
+  await expect(editor).toContainText('SSH Config 不保存密码');
+  await expect(editor.getByRole('button', { name: '确认并写入' })).toBeDisabled();
+  await page.screenshot({ path: testInfo.outputPath('ssh-write-preview-zh.png') });
 });
 
 test('deletes a manual host after confirmation', async ({ page }) => {

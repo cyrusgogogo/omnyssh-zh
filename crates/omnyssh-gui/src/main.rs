@@ -26,8 +26,8 @@ use commands::sftp::{
 };
 use commands::snippets::{delete_snippet, execute_snippet, list_snippets, save_snippet};
 use commands::ssh_config::{
-    apply_ssh_config, get_ssh_config_snapshot, preview_ssh_config, preview_ssh_config_restore,
-    restore_ssh_config,
+    apply_ssh_config, get_ssh_config_snapshot, preview_host_ssh_config, preview_ssh_config,
+    preview_ssh_config_restore, restore_ssh_config, write_host_ssh_config,
 };
 use commands::ssh_keys::{
     backup_ssh_key, create_ssh_key, delete_ssh_key, get_ssh_key_snapshot, import_ssh_key,
@@ -197,6 +197,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
             save_update_config,
             get_ssh_config_snapshot,
             preview_ssh_config,
+            preview_host_ssh_config,
+            write_host_ssh_config,
             apply_ssh_config,
             restore_ssh_config,
             preview_ssh_config_restore,
@@ -309,6 +311,12 @@ fn main() {
 
     #[cfg(debug_assertions)]
     export_bindings(BINDINGS_PATH);
+
+    // 生成 IPC 类型时无需启动桌面窗口、托盘或连接真实主机。
+    #[cfg(debug_assertions)]
+    if std::env::args().any(|arg| arg == "--export-bindings") {
+        return;
+    }
 
     let app = tauri::Builder::default()
         // Persists UI prefs (theme, sidebar collapse, refresh interval) from the

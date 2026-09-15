@@ -3,6 +3,10 @@
 //! User-authored configuration is treated as read-only. OmnySSH writes exact,
 //! single-alias `Host` blocks to `~/.ssh/omnyssh.conf` and installs one top-level
 //! include in `~/.ssh/config` after an explicit preview.
+//! The separate `host_write` workflow can explicitly update one user-owned exact
+//! Host block without serializing or replacing unrelated configuration.
+
+pub mod host_write;
 
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};

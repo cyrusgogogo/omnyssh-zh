@@ -89,7 +89,7 @@ pub async fn delete_host(name: String) -> Result<(), CommandError> {
 /// SSH-config rename origin, and a monitoring mode the payload left out. Editing
 /// e.g. notes therefore never drops a stored secret or a recorded key setup. A
 /// provided secret still overwrites the old one.
-fn upsert(hosts: &mut Vec<Host>, input: HostInputDto, imported: Option<Host>) {
+pub(super) fn upsert(hosts: &mut Vec<Host>, input: HostInputDto, imported: Option<Host>) {
     // An omitted monitoring mode means "unchanged", not "back to SSH" — losing it
     // would silently start logging in to a device chosen for reachability only.
     let monitoring_given = input.monitoring.is_some();

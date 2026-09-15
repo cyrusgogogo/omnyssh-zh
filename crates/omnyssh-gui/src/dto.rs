@@ -222,6 +222,39 @@ pub struct SshApplyReportDto {
     pub ssh_validation: String,
 }
 
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SshHostWritePreviewDto {
+    pub alias: String,
+    pub target_path: String,
+    pub existing: bool,
+    pub diff: String,
+    pub fingerprint: String,
+    pub requires_key_warning: bool,
+}
+
+impl From<omnyssh_core::config::ssh_config_manager::host_write::HostWritePreview>
+    for SshHostWritePreviewDto
+{
+    fn from(value: omnyssh_core::config::ssh_config_manager::host_write::HostWritePreview) -> Self {
+        Self {
+            alias: value.alias,
+            target_path: value.target_path,
+            existing: value.existing,
+            diff: value.diff,
+            fingerprint: value.fingerprint,
+            requires_key_warning: value.requires_key_warning,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SshHostWriteReportDto {
+    pub backup_path: String,
+    pub ssh_validation: String,
+}
+
 /// Live connection state for a host (tech-gui.md §4.1). Internally tagged so the
 /// frontend consumes a discriminated union keyed on `kind`.
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]

@@ -13,6 +13,8 @@ import type {
   SshApplyReportDto,
   SshConfigPreviewDto,
   SshConfigSnapshotDto,
+  SshHostWritePreviewDto,
+  SshHostWriteReportDto,
   SshKeyRecordDto,
   SshKeySnapshotDto,
   SnippetDto,
@@ -130,6 +132,22 @@ export async function closeDesktopCard(): Promise<void> {
 
 export async function getSshConfigSnapshot(): Promise<SshConfigSnapshotDto> {
   const res = await commands.getSshConfigSnapshot();
+  if (res.status === 'error') throw new Error(formatCommandError(res.error));
+  return res.data;
+}
+
+export async function previewHostSshConfig(input: HostInputDto): Promise<SshHostWritePreviewDto> {
+  const res = await commands.previewHostSshConfig(input);
+  if (res.status === 'error') throw new Error(formatCommandError(res.error));
+  return res.data;
+}
+
+export async function writeHostSshConfig(
+  input: HostInputDto,
+  expectedFingerprint: string,
+  confirmNonKey: boolean
+): Promise<SshHostWriteReportDto> {
+  const res = await commands.writeHostSshConfig(input, expectedFingerprint, confirmNonKey);
   if (res.status === 'error') throw new Error(formatCommandError(res.error));
   return res.data;
 }
