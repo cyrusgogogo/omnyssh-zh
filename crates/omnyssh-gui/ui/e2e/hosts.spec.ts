@@ -97,6 +97,9 @@ async function boot(page: Page): Promise<void> {
               return Promise.resolve(null);
             case 'set_desktop_card_always_on_top':
               return Promise.resolve(args.alwaysOnTop);
+            case 'toggle_desktop_card_visibility':
+              win.__desktopCardHidden = !win.__desktopCardHidden;
+              return Promise.resolve(null);
             case 'set_desktop_card_compact':
               win.__desktopCardLayout = { ...args };
               return Promise.resolve(!args.compact && win.__mockExpandAbove === true);
@@ -366,6 +369,40 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
     'true'
   );
   expect(pageErrors).toEqual([]);
+});
+
+test('desktop card hide button uses the native toggle and keeps the selected hosts', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: 'Add web-1 to the desktop card' }).click();
+  await page.goto('/?view=desktop-card');
+  const hide = page.getByRole('button', { name: 'Hide desktop card (Ctrl+Shift+H)' });
+  await expect(hide).toHaveAttribute('aria-keyshortcuts', 'Control+Shift+H');
+  await hide.click();
+  await expect.poll(() => page.evaluate(() =>
+    (window as unknown as { __desktopCardHidden: boolean }).__desktopCardHidden
+  )).toBe(true);
+  await expect(page.getByText('web-1', { exact: true })).toBeVisible();
+  // The browser stub leaves the button visible; the real native window is hidden.
+  await hide.click();
+  await expect.poll(() => page.evaluate(() =>
+    (window as unknown as { __desktopCardHidden: boolean }).__desktopCardHidden
+  )).toBe(false);
+  expect(await page.evaluate(() => localStorage.getItem('omnyssh-desktop-card-hosts')))
+    .toBe(JSON.stringify(['web-1']));
+
+  // Extra host dots must scroll without covering the new header action.
+  await page.setViewportSize({ width: 380, height: 310 });
+  await page.evaluate((host) => {
+    const hosts = Array.from({ length: 8 }, (_, index) => ({ ...host, name: `host-${index}` }));
+    localStorage.setItem('omnyssh-desktop-card-hosts', JSON.stringify(hosts.map((h) => h.name)));
+    (window as unknown as { __fireEvent: (event: string, payload: unknown) => void })
+      .__fireEvent('hosts-loaded', hosts);
+  }, HOSTS[0]);
+  const switcher = page.getByRole('navigation', { name: 'Hosts' });
+  await expect(switcher.getByRole('button')).toHaveCount(8);
+  const switcherBox = await switcher.boundingBox();
+  const minimizeBox = await page.getByRole('button', { name: 'Shrink to host dots' }).boundingBox();
+  expect(switcherBox!.x + switcherBox!.width).toBeLessThanOrEqual(minimizeBox!.x);
 });
 
 test('scrollbars stay hidden until their pane is scrolling', async ({ page }) => {

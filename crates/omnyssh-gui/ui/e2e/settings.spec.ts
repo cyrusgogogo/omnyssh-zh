@@ -92,6 +92,8 @@ test('the footer gear opens Settings; theme, interval, and update prefs work', a
 
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await expect(page.getByText('Hide / show shortcut', { exact: true })).toBeVisible();
+  await expect(page.locator('kbd', { hasText: 'Ctrl+Shift+H' })).toBeVisible();
 
   // Theme mirrors the sidebar toggle (§5.1): the app boots dark; picking Light flips it.
   // `exact` avoids the sidebar toggle whose label reads "Switch to light theme".

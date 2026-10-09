@@ -9,6 +9,9 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Features
+- **Desktop cards can be hidden and restored with Ctrl+Shift+H.** This global shortcut slides the native card window off the right edge of the desktop, then brings it back from the right to its original position. It works in expanded and host-dot modes while other applications have focus. The card header includes a hide button, and Settings shows the shortcut.
+
 ## 1.0.5 — 2026-09-15
 
 ### Features

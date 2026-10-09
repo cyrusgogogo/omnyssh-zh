@@ -1,14 +1,19 @@
 //! Native window lifecycle for the compact, always-on-top dashboard card.
 
 use std::future::Future;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{
-    AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, State, WebviewUrl,
+    AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, State, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
 };
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tokio::sync::Mutex;
 
 use super::settings::{load_terminal_open_mode, open_system_terminal};
+use crate::desktop_card_motion::{offscreen_right, position_at, DURATION_MS};
 use crate::dto::HostRuntimeSnapshotDto;
 use crate::error::CommandError;
 use crate::state::GuiState;
@@ -23,6 +28,142 @@ const EXPANDED_HEIGHT: f64 = 310.0;
 const DOTS_HEIGHT: f64 = 48.0;
 const DOTS_MIN_WIDTH: f64 = 72.0;
 const DOTS_MAX_WIDTH: f64 = EXPANDED_WIDTH;
+const HIDE_SHORTCUT: &str = "Control+Shift+H";
+
+#[derive(Default)]
+pub struct DesktopCardState {
+    // Serialize visibility, resizing and closing so they cannot overwrite a flight.
+    operation: Mutex<()>,
+    hidden: AtomicBool,
+    shortcut_down: AtomicBool,
+}
+
+impl DesktopCardState {
+    fn accept_shortcut(&self, event: ShortcutState) -> bool {
+        if event == ShortcutState::Released {
+            self.shortcut_down.store(false, Ordering::Release);
+            return false;
+        }
+        !self.shortcut_down.swap(true, Ordering::AcqRel)
+    }
+}
+
+pub fn desktop_card_is_hidden(app: &AppHandle) -> bool {
+    app.state::<DesktopCardState>()
+        .hidden
+        .load(Ordering::Acquire)
+}
+
+/// Also release the shortcut after an OS-level close (for example Alt+F4).
+pub async fn desktop_card_destroyed(app: AppHandle) -> Result<(), CommandError> {
+    let state = app.state::<DesktopCardState>();
+    let _operation = state.operation.lock().await;
+    if app.get_webview_window(DESKTOP_CARD_WINDOW_LABEL).is_none() {
+        reset_visibility(&app, &state)?;
+    }
+    Ok(())
+}
+
+fn reset_visibility(app: &AppHandle, state: &DesktopCardState) -> Result<(), CommandError> {
+    state.hidden.store(false, Ordering::Release);
+    state.shortcut_down.store(false, Ordering::Release);
+    if app.global_shortcut().is_registered(HIDE_SHORTCUT) {
+        app.global_shortcut()
+            .unregister(HIDE_SHORTCUT)
+            .map_err(command_error)?;
+    }
+    Ok(())
+}
+
+fn register_hide_shortcut(app: &AppHandle) -> Result<(), CommandError> {
+    if app.global_shortcut().is_registered(HIDE_SHORTCUT) {
+        return Ok(());
+    }
+    app.global_shortcut()
+        .on_shortcut(HIDE_SHORTCUT, |app, _, event| {
+            let state = app.state::<DesktopCardState>();
+            if !state.accept_shortcut(event.state) {
+                return; // Holding the keys must not repeatedly hide and reveal.
+            }
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = toggle_desktop_card_visibility(app.clone()).await {
+                    use tauri_specta::Event;
+                    let _ = crate::events::Error {
+                        message: error.raw_detail.unwrap_or(error.code),
+                    }
+                    .emit(&app);
+                }
+            });
+        })
+        .map_err(|error| command_error(format!("Cannot register Ctrl+Shift+H: {error}")))
+}
+
+async fn fly(window: &WebviewWindow, from: i32, to: i32, y: i32) -> Result<(), CommandError> {
+    let start = Instant::now();
+    loop {
+        let progress = start.elapsed().as_secs_f64() / (DURATION_MS as f64 / 1000.0);
+        window
+            .set_position(PhysicalPosition::new(position_at(from, to, progress), y))
+            .map_err(command_error)?;
+        if progress >= 1.0 {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(16)).await;
+    }
+}
+
+async fn animate_visibility(
+    window: &WebviewWindow,
+    state: &DesktopCardState,
+    visible: bool,
+) -> Result<(), CommandError> {
+    // Hidden windows are parked at their original position after each flight.
+    // This also keeps the window-state plugin from saving offscreen coordinates.
+    let origin = window.outer_position().map_err(command_error)?;
+    let monitors = window.available_monitors().map_err(command_error)?;
+    let outside = offscreen_right(
+        monitors
+            .iter()
+            .map(|monitor| (monitor.position().x, monitor.size().width)),
+        origin.x,
+    );
+    state.hidden.store(!visible, Ordering::Release);
+    let result = async {
+        if visible {
+            window
+                .set_position(PhysicalPosition::new(outside, origin.y))
+                .map_err(command_error)?;
+            window.unminimize().map_err(command_error)?;
+            window.show().map_err(command_error)?;
+            fly(window, outside, origin.x, origin.y).await?;
+        } else {
+            fly(window, origin.x, outside, origin.y).await?;
+            window.hide().map_err(command_error)?;
+            window.set_position(origin).map_err(command_error)?;
+        }
+        Ok(())
+    }
+    .await;
+    if result.is_err() {
+        // A failed window-manager operation must leave a recoverable card.
+        let _ = window.set_position(origin);
+        let _ = window.show();
+        state.hidden.store(false, Ordering::Release);
+    }
+    result
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn toggle_desktop_card_visibility(app: AppHandle) -> Result<(), CommandError> {
+    let state = app.state::<DesktopCardState>();
+    let _operation = state.operation.lock().await;
+    if let Some(window) = app.get_webview_window(DESKTOP_CARD_WINDOW_LABEL) {
+        animate_visibility(&window, &state, state.hidden.load(Ordering::Acquire)).await?;
+    }
+    Ok(())
+}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,14 +204,22 @@ where
 #[tauri::command]
 #[specta::specta]
 pub async fn show_desktop_card(app: AppHandle) -> Result<(), CommandError> {
+    let state = app.state::<DesktopCardState>();
+    let _operation = state.operation.lock().await;
+    // Register only while a card exists; shortcut conflicts are surfaced through IPC.
+    register_hide_shortcut(&app)?;
     if let Some(window) = app.get_webview_window(DESKTOP_CARD_WINDOW_LABEL) {
+        if state.hidden.load(Ordering::Acquire) {
+            animate_visibility(&window, &state, true).await?;
+        }
         window.show().map_err(command_error)?;
         window.unminimize().map_err(command_error)?;
         window.set_focus().map_err(command_error)?;
         return Ok(());
     }
 
-    WebviewWindowBuilder::new(
+    state.hidden.store(false, Ordering::Release);
+    let result = WebviewWindowBuilder::new(
         &app,
         DESKTOP_CARD_WINDOW_LABEL,
         WebviewUrl::App(DESKTOP_CARD_APP_PATH.into()),
@@ -89,7 +238,11 @@ pub async fn show_desktop_card(app: AppHandle) -> Result<(), CommandError> {
     .visible(false)
     .center()
     .build()
-    .map_err(command_error)?;
+    .map_err(command_error);
+    if let Err(error) = result {
+        let _ = app.global_shortcut().unregister(HIDE_SHORTCUT);
+        return Err(error);
+    }
     Ok(())
 }
 
@@ -104,6 +257,8 @@ pub async fn set_desktop_card_compact(
     host_count: u32,
     expanded_above: bool,
 ) -> Result<bool, CommandError> {
+    let state = app.state::<DesktopCardState>();
+    let _operation = state.operation.lock().await;
     let window = app
         .get_webview_window(DESKTOP_CARD_WINDOW_LABEL)
         .ok_or_else(|| CommandError::new("desktop-card", "desktop card window is not open"))?;
@@ -257,9 +412,12 @@ pub async fn open_desktop_card_host(
 #[tauri::command]
 #[specta::specta]
 pub async fn close_desktop_card(app: AppHandle) -> Result<(), CommandError> {
+    let state = app.state::<DesktopCardState>();
+    let _operation = state.operation.lock().await;
     if let Some(window) = app.get_webview_window(DESKTOP_CARD_WINDOW_LABEL) {
         window.close().map_err(command_error)?;
     }
+    reset_visibility(&app, &state)?;
     Ok(())
 }
 
@@ -272,6 +430,15 @@ mod tests {
     use std::cell::Cell;
 
     use super::*;
+
+    #[test]
+    fn holding_the_shortcut_toggles_once_and_a_new_press_can_restore() {
+        let state = DesktopCardState::default();
+        assert!(state.accept_shortcut(ShortcutState::Pressed));
+        assert!(!state.accept_shortcut(ShortcutState::Pressed));
+        assert!(!state.accept_shortcut(ShortcutState::Released));
+        assert!(state.accept_shortcut(ShortcutState::Pressed));
+    }
 
     #[test]
     fn desktop_card_has_a_stable_secondary_window_label() {

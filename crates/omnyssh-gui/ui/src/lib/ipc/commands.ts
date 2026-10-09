@@ -95,6 +95,11 @@ export async function showDesktopCard(): Promise<void> {
   if (res.status === 'error') throw new Error(formatCommandError(res.error));
 }
 
+export async function toggleDesktopCardVisibility(): Promise<void> {
+  const res = await commands.toggleDesktopCardVisibility();
+  if (res.status === 'error') throw new Error(formatCommandError(res.error));
+}
+
 export async function setDesktopCardAlwaysOnTop(alwaysOnTop: boolean): Promise<boolean> {
   const res = await commands.setDesktopCardAlwaysOnTop(alwaysOnTop);
   if (res.status === 'error') throw new Error(formatCommandError(res.error));

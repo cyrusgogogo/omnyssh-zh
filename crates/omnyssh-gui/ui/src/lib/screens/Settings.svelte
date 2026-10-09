@@ -169,6 +169,17 @@
       </div>
     </Surface>
 
+    <Surface class="p-5">
+      <h2 class="mb-3 text-sm font-semibold">{$t('desktop-card-title')}</h2>
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm">{$t('settings-desktop-card-shortcut')}</p>
+          <p class="text-xs text-muted">{$t('settings-desktop-card-shortcut-description')}</p>
+        </div>
+        <kbd class="shrink-0 rounded-lg border border-default bg-surface-inset px-3 py-1.5 text-xs">Ctrl+Shift+H</kbd>
+      </div>
+    </Surface>
+
     <!-- Privacy -->
     <Surface class="p-5">
       <h2 class="mb-3 text-sm font-semibold">{$t('settings-privacy')}</h2>

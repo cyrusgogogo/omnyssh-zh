@@ -8,14 +8,16 @@
 
 mod bridge;
 mod commands;
+mod desktop_card_motion;
 mod dto;
 mod error;
 mod events;
 mod state;
 
 use commands::desktop_card::{
-    close_desktop_card, get_desktop_card_snapshot, open_desktop_card_host,
+    close_desktop_card, desktop_card_is_hidden, get_desktop_card_snapshot, open_desktop_card_host,
     set_desktop_card_always_on_top, set_desktop_card_compact, show_desktop_card,
+    toggle_desktop_card_visibility, DesktopCardState,
 };
 use commands::hosts::{delete_host, list_hosts, refresh_metrics, reload_hosts, save_host};
 use commands::keysetup::start_key_setup;
@@ -218,7 +220,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
             set_desktop_card_always_on_top,
             set_desktop_card_compact,
             open_desktop_card_host,
-            close_desktop_card
+            close_desktop_card,
+            toggle_desktop_card_visibility
         ])
         .events(collect_events![
             events::HostsLoaded,
@@ -319,6 +322,8 @@ fn main() {
     }
 
     let app = tauri::Builder::default()
+        .manage(DesktopCardState::default())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         // Persists UI prefs (theme, sidebar collapse, refresh interval) from the
         // frontend JS API — no bespoke command (tech-gui.md §4.2, §5.1).
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -343,7 +348,10 @@ fn main() {
                 let window = webview.window();
                 // Reveal once: a later page load must not raise the window over
                 // whatever the user is doing.
-                if !window.is_visible().unwrap_or(false) {
+                if !window.is_visible().unwrap_or(false)
+                    && (window.label() != commands::desktop_card::DESKTOP_CARD_WINDOW_LABEL
+                        || !desktop_card_is_hidden(webview.app_handle()))
+                {
                     let _ = window.show();
                     // A window shown after build does not become key on its own everywhere.
                     let _ = window.set_focus();
@@ -351,6 +359,22 @@ fn main() {
             }
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed)
+                && window.label() == commands::desktop_card::DESKTOP_CARD_WINDOW_LABEL
+                && !EXIT_REQUESTED.load(std::sync::atomic::Ordering::Acquire)
+            {
+                let app = window.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let result = commands::desktop_card::desktop_card_destroyed(app.clone()).await;
+                    if let Err(error) = result {
+                        use tauri_specta::Event;
+                        let _ = events::Error {
+                            message: error.raw_detail.unwrap_or(error.code),
+                        }
+                        .emit(&app);
+                    }
+                });
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if should_hide_on_close(
                     window.label(),

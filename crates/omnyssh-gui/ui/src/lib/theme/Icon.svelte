@@ -49,6 +49,8 @@
   {:else if name === 'close'}
     <line x1="6" y1="6" x2="18" y2="18" />
     <line x1="18" y1="6" x2="6" y2="18" />
+  {:else if name === 'hide'}
+    <path d="M9.9 4.2A10.5 10.5 0 0 1 12 4c7 0 10 8 10 8a16.6 16.6 0 0 1-3 4.2M6.5 6.5A16.8 16.8 0 0 0 2 12s3 8 10 8a10.5 10.5 0 0 0 5.5-1.5M10 10a3 3 0 0 0 4 4M3 3l18 18" />
   {:else if name === 'collapse'}
     <polyline points="13 7 8 12 13 17" />
     <polyline points="18 7 13 12 18 17" />

@@ -10,6 +10,7 @@ export type IconName =
   | 'sftp'
   | 'terminal'
   | 'close'
+  | 'hide'
   | 'collapse'
   | 'expand'
   | 'minimize'

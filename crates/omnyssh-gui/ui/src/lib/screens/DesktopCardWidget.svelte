@@ -9,6 +9,7 @@
   import { streamerMode, displayHostname } from '$lib/stores/streamer';
   import {
     closeDesktopCard,
+    toggleDesktopCardVisibility,
     openDesktopCardHost,
     setDesktopCardAlwaysOnTop,
     setDesktopCardCompact
@@ -21,6 +22,7 @@
   let hoveredIndex = $state<number | null>(null);
   let lockedIndex = $state<number | null>(null);
   let pinBusy = $state(false);
+  let hideBusy = $state(false);
   let actionBusy = $state<'terminal' | 'sftp' | null>(null);
   let actionError = $state<string | null>(null);
   let expandedAbove = $state(false);
@@ -139,6 +141,18 @@
     }
   }
 
+  async function hideCard(): Promise<void> {
+    if (hideBusy) return;
+    hideBusy = true;
+    try {
+      await toggleDesktopCardVisibility();
+    } catch (error) {
+      lastError.set(message(error));
+    } finally {
+      hideBusy = false;
+    }
+  }
+
   function onKeydown(event: KeyboardEvent): void {
     if ($desktopCardCompact) return;
     if (event.key === 'ArrowLeft') move(-1);
@@ -238,7 +252,7 @@
         <div class="h-full min-w-0 flex-1 cursor-move select-none" aria-hidden="true"></div>
         {#if selectedCards.length > 0}
           <nav
-            class="desktop-card-switcher absolute left-1/2 top-1/2 flex max-w-48 -translate-x-1/2 -translate-y-1/2 items-center overflow-x-auto"
+            class="desktop-card-switcher absolute left-1/2 top-1/2 flex max-w-32 -translate-x-1/2 -translate-y-1/2 items-center overflow-x-auto"
             aria-label={$t('desktop-card-host-switcher')}
           >
             {#each selectedCards as card, index (card.host.name)}
@@ -284,6 +298,17 @@
           onclick={() => void togglePinned()}
         >
           <Icon name="pin" size={14} />
+        </button>
+        <button
+          type="button"
+          class="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-surface-inset hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50"
+          title={$t('desktop-card-hide')}
+          aria-label={$t('desktop-card-hide')}
+          aria-keyshortcuts="Control+Shift+H"
+          disabled={hideBusy}
+          onclick={() => void hideCard()}
+        >
+          <Icon name="hide" size={14} />
         </button>
         <button
           type="button"
