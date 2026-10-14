@@ -9,6 +9,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 1.0.8 — 2026-10-14
+
 Includes the close/tray settings, overview views and sorting, configurable shortcuts, animation fixes, and live theme synchronization introduced in 1.0.7.
 
 ### Bug Fixes
