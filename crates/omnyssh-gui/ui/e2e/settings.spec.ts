@@ -24,6 +24,7 @@ async function boot(page: Page, opts: { fireUpdateOnBoot: boolean }): Promise<vo
       const state = {
         hosts: hosts.map((h) => ({ ...h })),
         updateConfig: { checkOnStartup: true, skipVersion: '' } as Record<string, unknown>,
+        desktop: { closeBehavior: 'tray', trayClickBehavior: 'openMain', shortcut: 'Control+Shift+H', shortcutRegistered: true, shortcutError: null } as Record<string, unknown>,
         terminalMode: 'default'
       };
       const win = window as unknown as Record<string, unknown>;
@@ -38,6 +39,15 @@ async function boot(page: Page, opts: { fireUpdateOnBoot: boolean }): Promise<vo
       (win as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {
         invoke: (cmd: string, args: Record<string, unknown>) => {
           switch (cmd) {
+            case 'load_desktop_settings':
+              return Promise.resolve({ ...state.desktop });
+            case 'save_desktop_settings':
+              if (win.__shortcutConflict) return Promise.reject({ code: 'desktop-settings', rawDetail: 'Shortcut unavailable (it may be in use)' });
+              state.desktop = { ...(args.settings as Record<string, unknown>), shortcutRegistered: !!(args.settings as Record<string, unknown>).shortcut, shortcutError: null };
+              win.__savedDesktopSettings = state.desktop;
+              win.__retriedShortcut = args.retryShortcut;
+              fire('desktop-settings-changed', state.desktop);
+              return Promise.resolve({ ...state.desktop });
             case 'list_hosts':
               return Promise.resolve([...state.hosts]);
             case 'reload_hosts':
@@ -93,7 +103,7 @@ test('the footer gear opens Settings; theme, interval, and update prefs work', a
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await expect(page.getByText('Hide / show shortcut', { exact: true })).toBeVisible();
-  await expect(page.locator('kbd', { hasText: 'Ctrl+Shift+H' })).toBeVisible();
+  await expect(page.getByLabel('Hide / show shortcut', { exact: true })).toHaveValue('Ctrl+Shift+H');
 
   // Theme mirrors the sidebar toggle (§5.1): the app boots dark; picking Light flips it.
   // `exact` avoids the sidebar toggle whose label reads "Switch to light theme".
@@ -159,4 +169,29 @@ test('a settings toggle preserves a skipVersion the banner wrote out-of-band', a
   );
   expect(saved?.skipVersion).toBe('2.0.0');
   expect(saved?.checkOnStartup).toBe(false);
+});
+
+test('desktop behavior changes apply live; shortcut conflict preserves the old choice and can be retried', async ({ page }) => {
+  await boot(page, { fireUpdateOnBoot: false });
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Quit application', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Quit application', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Hide / show card', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__savedDesktopSettings.trayClickBehavior)).toBe('toggleCard');
+  await page.evaluate(() => { (window as any).__shortcutConflict = true; });
+  await page.getByRole('button', { name: 'Change shortcut', exact: true }).click();
+  await page.getByLabel('Hide / show shortcut', { exact: true }).press('Control+Alt+j');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Shortcut unavailable' })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__savedDesktopSettings.shortcut)).toBe('Control+Shift+H');
+  await page.evaluate(() => { (window as any).__shortcutConflict = false; });
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByLabel('Hide / show shortcut', { exact: true })).toHaveValue('Ctrl+Alt+J');
+  await page.getByRole('button', { name: 'Re-register shortcut', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__retriedShortcut)).toBe(true);
+  await page.getByRole('button', { name: 'Disable shortcut', exact: true }).click();
+  await expect(page.getByLabel('Hide / show shortcut', { exact: true })).toHaveValue('Shortcut disabled');
+  await page.getByRole('button', { name: 'Restore default', exact: true }).click();
+  await expect(page.getByLabel('Hide / show shortcut', { exact: true })).toHaveValue('Ctrl+Shift+H');
+  await page.screenshot({ path: test.info().outputPath('settings.png'), fullPage: true });
 });

@@ -4,6 +4,7 @@
   import { listen } from '@tauri-apps/api/event';
   import { startEventBridge } from '$lib/ipc/subscribe';
   import { reloadHosts, refreshMetrics } from '$lib/ipc/commands';
+  import { startDesktopSettings } from '$lib/stores/desktopSettings';
   import { theme } from '$lib/stores/theme';
   import { sidebarCollapsed } from '$lib/stores/ui';
   import { streamerMode } from '$lib/stores/streamer';
@@ -24,7 +25,11 @@
     const stopScrollbars = installAutoHideScrollbars();
     // Reconcile the persisted prefs with their canonical tauri-plugin-store values;
     // the synchronous localStorage mirrors already seeded the first paint (§5.1, §2).
-    void theme.hydrate();
+    const stopTheme = theme.startSync();
+    let stopDesktopSettings: (() => void) | undefined;
+    void startDesktopSettings().then((off) => {
+      if (disposed) off(); else stopDesktopSettings = off;
+    }).catch(() => {});
     if (!desktopCardView) void sidebarCollapsed.hydrate();
     void streamerMode.hydrate();
     if (!desktopCardView) {
@@ -67,6 +72,8 @@
       stopDesktopCardAction?.();
       stopRefresh();
       stopScrollbars();
+      stopTheme();
+      stopDesktopSettings?.();
     };
   });
 </script>

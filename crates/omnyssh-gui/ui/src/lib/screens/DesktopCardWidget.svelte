@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { desktopSettings, shortcutLabel } from '$lib/stores/desktopSettings';
   import { onMount } from 'svelte';
   import { serverCards } from './serverCard';
   import {
@@ -26,6 +27,12 @@
   let actionBusy = $state<'terminal' | 'sftp' | null>(null);
   let actionError = $state<string | null>(null);
   let expandedAbove = $state(false);
+  let layoutReady = $state(false);
+  let closingPreview = $state(false);
+  let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+  let closeTimer: ReturnType<typeof setTimeout> | undefined;
+  let disposed = false;
+  const motionDuration = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180;
   let resizeKey = '';
   let resizeQueue: Promise<void> = Promise.resolve();
   const selectedCards = $derived(
@@ -56,10 +63,14 @@
     const nextKey = `${compact}:${hostCount}`;
     if (nextKey === resizeKey) return;
     resizeKey = nextKey;
+    layoutReady = false;
     resizeQueue = resizeQueue
       .then(async () => {
+        if (disposed || nextKey !== resizeKey) return;
         const opensAbove = await setDesktopCardCompact(compact, hostCount, expandedAbove);
+        if (disposed) return;
         expandedAbove = compact ? false : opensAbove;
+        layoutReady = true;
       })
       .catch((error) => lastError.set(message(error)));
   }
@@ -70,33 +81,60 @@
   }
 
   function minimizeCard(): void {
+    clearTimeout(hoverTimer);
+    cancelPreviewClose();
     hoveredIndex = null;
     lockedIndex = null;
     desktopCardCompact.set(true);
   }
 
   function restoreCard(): void {
+    clearTimeout(hoverTimer);
+    cancelPreviewClose();
     hoveredIndex = null;
     lockedIndex = null;
     desktopCardCompact.set(false);
   }
 
-  function previewHost(index: number): void {
-    if (lockedIndex == null) hoveredIndex = index;
+  function cancelPreviewClose(): void {
+    clearTimeout(closeTimer);
+    closingPreview = false;
+  }
+
+  function previewHost(index: number, immediate = false): void {
+    cancelPreviewClose();
+    clearTimeout(hoverTimer);
+    if (lockedIndex != null) return;
+    if (hoveredIndex != null || immediate) hoveredIndex = index;
+    else hoverTimer = setTimeout(() => { hoveredIndex = index; }, motionDuration() ? 100 : 0);
   }
 
   function toggleHostLock(index: number): void {
+    clearTimeout(hoverTimer);
+    cancelPreviewClose();
     currentIndex = index;
+    hoveredIndex = index;
     lockedIndex = lockedIndex === index ? null : index;
   }
 
   function onCardPointerLeave(): void {
-    if ($desktopCardCompact && lockedIndex == null) hoveredIndex = null;
+    clearTimeout(hoverTimer);
+    if (!$desktopCardCompact || lockedIndex != null) return;
+    // A grace period prevents native resize / crossing a dot boundary from
+    // closing the preview under the pointer. Shrink only after the visual exit.
+    clearTimeout(closeTimer);
+    closeTimer = setTimeout(() => {
+      closingPreview = true;
+      closeTimer = setTimeout(() => {
+        hoveredIndex = null;
+        closingPreview = false;
+      }, motionDuration());
+    }, 160);
   }
 
   function onCardFocusOut(event: FocusEvent & { currentTarget: HTMLElement }): void {
     if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
-    if ($desktopCardCompact && lockedIndex == null) hoveredIndex = null;
+    onCardPointerLeave();
   }
 
   async function togglePinned(): Promise<void> {
@@ -174,6 +212,9 @@
     const timer = window.setInterval(sync, 750);
     window.addEventListener('storage', sync);
     return () => {
+      disposed = true;
+      clearTimeout(hoverTimer);
+      clearTimeout(closeTimer);
       window.clearInterval(timer);
       window.removeEventListener('storage', sync);
     };
@@ -190,6 +231,10 @@
       : 'flex-col'} {dotsOnly
       ? 'rounded-full'
       : 'rounded-2xl'}"
+    class:preview-open={layoutReady && !closingPreview}
+    class:preview-above={expandedAbove}
+    style:--dot-inset={`${Math.max(0, (380 - Math.min(380, Math.max(72, selectedCards.length * 32 + 24))) / 2)}px`}
+    onpointerenter={cancelPreviewClose}
     data-mode={dotsOnly ? 'dots' : $desktopCardCompact ? 'compact-detail' : 'expanded'}
     role="group"
     aria-label={$t('desktop-card-title')}
@@ -229,7 +274,11 @@
               aria-pressed={lockedIndex === index}
               aria-expanded={detailIndex === index}
               onpointerenter={() => previewHost(index)}
-              onfocus={() => previewHost(index)}
+              onpointerdown={() => clearTimeout(hoverTimer)}
+              onfocus={(event) => {
+                // A pointer focus must not resize/move the dot between down and up.
+                if (event.currentTarget.matches(':focus-visible')) previewHost(index, true);
+              }}
               onclick={() => toggleHostLock(index)}
             >
               <span
@@ -302,9 +351,9 @@
         <button
           type="button"
           class="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-surface-inset hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50"
-          title={$t('desktop-card-hide')}
+          title={$desktopSettings.shortcutRegistered ? `${$t('desktop-card-hide')} (${shortcutLabel($desktopSettings.shortcut)})` : $t('desktop-card-hide')}
           aria-label={$t('desktop-card-hide')}
-          aria-keyshortcuts="Control+Shift+H"
+          aria-keyshortcuts={$desktopSettings.shortcutRegistered ? $desktopSettings.shortcut.replace(/Key([A-Z])/g, '$1').replace(/Digit([0-9])/g, '$1').replace(/Super/g, 'Meta') : undefined}
           disabled={hideBusy}
           onclick={() => void hideCard()}
         >
@@ -476,3 +525,21 @@
     {/if}
   </section>
 </main>
+
+<style>
+  /* Animate inside the enlarged transparent native bounds. The window shrinks
+     only after the exit, so the compositor never clips an outgoing detail. */
+  section[data-mode='compact-detail'] {
+    clip-path: inset(0 var(--dot-inset) calc(100% - 48px) var(--dot-inset) round 24px);
+    transition: clip-path 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  section[data-mode='compact-detail'].preview-above {
+    clip-path: inset(calc(100% - 48px) var(--dot-inset) 0 var(--dot-inset) round 24px);
+  }
+  section[data-mode='compact-detail'].preview-open {
+    clip-path: inset(0 0 0 0 round 16px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    section[data-mode='compact-detail'] { transition: none; }
+  }
+</style>

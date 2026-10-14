@@ -5,6 +5,7 @@ import type { Channel } from '@tauri-apps/api/core';
 import { commands } from '$lib/bindings';
 import { formatCommandError } from '$lib/i18n';
 import type {
+  DesktopSettingsDto,
   FileEntryDto,
   HostDto,
   HostInputDto,
@@ -390,4 +391,14 @@ export async function loadUpdateConfig(): Promise<UpdateConfigDto> {
 export async function saveUpdateConfig(config: UpdateConfigDto): Promise<void> {
   const res = await commands.saveUpdateConfig(config);
   if (res.status === 'error') throw new Error(formatCommandError(res.error));
+}
+
+export async function loadDesktopSettings(): Promise<DesktopSettingsDto> {
+  return commands.loadDesktopSettings();
+}
+
+export async function saveDesktopSettings(settings: DesktopSettingsDto, retryShortcut = false): Promise<DesktopSettingsDto> {
+  const res = await commands.saveDesktopSettings(settings, retryShortcut);
+  if (res.status === 'error') throw new Error(formatCommandError(res.error));
+  return res.data;
 }

@@ -9,6 +9,7 @@
 mod bridge;
 mod commands;
 mod desktop_card_motion;
+mod desktop_preferences;
 mod dto;
 mod error;
 mod events;
@@ -37,6 +38,10 @@ use commands::ssh_keys::{
 };
 use commands::terminal::{terminal_close, terminal_open, terminal_resize, terminal_write};
 use commands::update::{check_update, install_update, load_update_config, save_update_config};
+use desktop_preferences::{
+    load_desktop_settings, save_desktop_settings, CloseBehavior, DesktopPreferences,
+    TrayClickBehavior,
+};
 use omnyssh_core::event::{CoreEvent, SessionId};
 use omnyssh_core::ssh::pty::PtyManager;
 use state::GuiState;
@@ -105,8 +110,8 @@ fn show_main_window(app: &tauri::AppHandle) {
     }
 }
 
-fn should_hide_on_close(window_label: &str, exit_requested: bool) -> bool {
-    window_label == "main" && !exit_requested
+fn should_hide_on_close(window_label: &str, exit_requested: bool, behavior: CloseBehavior) -> bool {
+    window_label == "main" && !exit_requested && behavior == CloseBehavior::Tray
 }
 
 fn should_prevent_app_exit(exit_requested: bool) -> bool {
@@ -128,13 +133,25 @@ fn install_tray(app: &tauri::App) -> tauri::Result<()> {
 
     let show = MenuItem::with_id(app, "tray-show", show_label, true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "tray-quit", quit_label, true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let card = MenuItem::with_id(
+        app,
+        "tray-card",
+        if chinese {
+            "隐藏 / 显示桌面卡片"
+        } else {
+            "Hide / show desktop card"
+        },
+        true,
+        None::<&str>,
+    )?;
+    let menu = Menu::with_items(app, &[&show, &card, &quit])?;
     let mut tray = TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
         .tooltip("OmnySSH")
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "tray-show" => show_main_window(app),
+            "tray-card" => desktop_preferences::toggle_card_from_tray(app),
             "tray-quit" => {
                 EXIT_REQUESTED.store(true, std::sync::atomic::Ordering::Release);
                 app.exit(0);
@@ -148,12 +165,19 @@ fn install_tray(app: &tauri::App) -> tauri::Result<()> {
                     button: MouseButton::Left,
                     button_state: MouseButtonState::Up,
                     ..
-                } | TrayIconEvent::DoubleClick {
-                    button: MouseButton::Left,
-                    ..
                 }
             ) {
-                show_main_window(tray.app_handle());
+                let app = tray.app_handle();
+                match app
+                    .state::<DesktopPreferences>()
+                    .snapshot()
+                    .tray_click_behavior
+                {
+                    TrayClickBehavior::OpenMain => show_main_window(app),
+                    TrayClickBehavior::ToggleCard => {
+                        desktop_preferences::toggle_card_from_tray(app)
+                    }
+                }
             }
         });
     if let Some(icon) = app.default_window_icon() {
@@ -212,6 +236,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
             read_ssh_public_key,
             delete_ssh_key,
             restore_ssh_key,
+            load_desktop_settings,
+            save_desktop_settings,
             load_terminal_open_mode,
             save_terminal_open_mode,
             open_system_terminal,
@@ -323,6 +349,7 @@ fn main() {
 
     let app = tauri::Builder::default()
         .manage(DesktopCardState::default())
+        .manage(DesktopPreferences::default())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         // Persists UI prefs (theme, sidebar collapse, refresh interval) from the
         // frontend JS API — no bespoke command (tech-gui.md §4.2, §5.1).
@@ -336,6 +363,7 @@ fn main() {
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(WINDOW_STATE_FLAGS)
+                .with_denylist(&[commands::desktop_card::DESKTOP_CARD_WINDOW_LABEL])
                 .build(),
         )
         .invoke_handler(builder.invoke_handler())
@@ -376,9 +404,18 @@ fn main() {
                 });
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if should_hide_on_close(
+                let behavior = window.app_handle().state::<DesktopPreferences>().snapshot().close_behavior;
+                if window.label() == commands::desktop_card::DESKTOP_CARD_WINDOW_LABEL {
+                    commands::desktop_card::save_desktop_card_position(window.app_handle());
+                }
+                if window.label() == "main" && behavior == CloseBehavior::Quit {
+                    api.prevent_close();
+                    EXIT_REQUESTED.store(true, std::sync::atomic::Ordering::Release);
+                    window.app_handle().exit(0);
+                } else if should_hide_on_close(
                     window.label(),
                     EXIT_REQUESTED.load(std::sync::atomic::Ordering::Acquire),
+                    behavior,
                 ) {
                     api.prevent_close();
                     let _ = window.hide();
@@ -387,6 +424,9 @@ fn main() {
         })
         .setup(move |app| {
             builder.mount_events(app);
+            if let Err(error) = desktop_preferences::initialize(app.handle()) {
+                eprintln!("Desktop settings: {}", error.raw_detail.unwrap_or(error.code));
+            }
             install_tray(app)?;
 
             let reveal = app.handle().clone();
@@ -455,10 +495,12 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("failed to launch OmnySSH Desktop");
-    app.run(|_app, event| {
+    app.run(|app, event| {
         if let tauri::RunEvent::ExitRequested { api, .. } = event {
             if should_prevent_app_exit(EXIT_REQUESTED.load(std::sync::atomic::Ordering::Acquire)) {
                 api.prevent_exit();
+            } else {
+                commands::desktop_card::save_desktop_card_position(app);
             }
         }
     });
@@ -466,6 +508,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use super::CloseBehavior;
     use super::{
         export_bindings, should_hide_on_close, should_prevent_app_exit,
         should_retry_software_rendering, BINDINGS_PATH,
@@ -504,13 +547,18 @@ mod tests {
 
     #[test]
     fn only_the_main_window_close_is_redirected_to_the_tray() {
-        assert!(should_hide_on_close("main", false));
-        assert!(!should_hide_on_close("main", true));
-        assert!(!should_hide_on_close("secondary", false));
+        assert!(should_hide_on_close("main", false, CloseBehavior::Tray));
+        assert!(!should_hide_on_close("main", true, CloseBehavior::Tray));
+        assert!(!should_hide_on_close(
+            "secondary",
+            false,
+            CloseBehavior::Tray
+        ));
+        assert!(!should_hide_on_close("main", false, CloseBehavior::Quit));
     }
 
     #[test]
-    fn only_the_tray_quit_action_allows_process_exit() {
+    fn explicit_quit_allows_process_exit() {
         assert!(should_prevent_app_exit(false));
         assert!(!should_prevent_app_exit(true));
     }

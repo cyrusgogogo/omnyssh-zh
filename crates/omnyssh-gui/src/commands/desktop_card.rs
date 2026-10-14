@@ -9,7 +9,7 @@ use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, State, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
 };
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
 use super::settings::{load_terminal_open_mode, open_system_terminal};
@@ -28,23 +28,28 @@ const EXPANDED_HEIGHT: f64 = 310.0;
 const DOTS_HEIGHT: f64 = 48.0;
 const DOTS_MIN_WIDTH: f64 = 72.0;
 const DOTS_MAX_WIDTH: f64 = EXPANDED_WIDTH;
-const HIDE_SHORTCUT: &str = "Control+Shift+H";
 
 #[derive(Default)]
 pub struct DesktopCardState {
     // Serialize visibility, resizing and closing so they cannot overwrite a flight.
     operation: Mutex<()>,
     hidden: AtomicBool,
-    shortcut_down: AtomicBool,
+    moving: AtomicBool,
+    // Keep the last on-screen origin while the hidden window stays offscreen.
+    origin: std::sync::Mutex<Option<PhysicalPosition<i32>>>,
 }
 
-impl DesktopCardState {
-    fn accept_shortcut(&self, event: ShortcutState) -> bool {
-        if event == ShortcutState::Released {
-            self.shortcut_down.store(false, Ordering::Release);
-            return false;
-        }
-        !self.shortcut_down.swap(true, Ordering::AcqRel)
+pub fn save_desktop_card_position(app: &AppHandle) {
+    let state = app.state::<DesktopCardState>();
+    let position = if state.hidden.load(Ordering::Acquire) || state.moving.load(Ordering::Acquire) {
+        *state.origin.lock().unwrap()
+    } else {
+        app.get_webview_window(DESKTOP_CARD_WINDOW_LABEL)
+            .and_then(|w| w.outer_position().ok())
+    };
+    if let (Some(position), Ok(store)) = (position, app.store("desktop-window.json")) {
+        store.set("position", serde_json::json!([position.x, position.y]));
+        let _ = store.save();
     }
 }
 
@@ -54,49 +59,20 @@ pub fn desktop_card_is_hidden(app: &AppHandle) -> bool {
         .load(Ordering::Acquire)
 }
 
-/// Also release the shortcut after an OS-level close (for example Alt+F4).
+/// Clear visibility state after an OS-level close (for example Alt+F4).
 pub async fn desktop_card_destroyed(app: AppHandle) -> Result<(), CommandError> {
     let state = app.state::<DesktopCardState>();
     let _operation = state.operation.lock().await;
     if app.get_webview_window(DESKTOP_CARD_WINDOW_LABEL).is_none() {
-        reset_visibility(&app, &state)?;
+        reset_visibility(&state);
     }
     Ok(())
 }
 
-fn reset_visibility(app: &AppHandle, state: &DesktopCardState) -> Result<(), CommandError> {
+fn reset_visibility(state: &DesktopCardState) {
     state.hidden.store(false, Ordering::Release);
-    state.shortcut_down.store(false, Ordering::Release);
-    if app.global_shortcut().is_registered(HIDE_SHORTCUT) {
-        app.global_shortcut()
-            .unregister(HIDE_SHORTCUT)
-            .map_err(command_error)?;
-    }
-    Ok(())
-}
-
-fn register_hide_shortcut(app: &AppHandle) -> Result<(), CommandError> {
-    if app.global_shortcut().is_registered(HIDE_SHORTCUT) {
-        return Ok(());
-    }
-    app.global_shortcut()
-        .on_shortcut(HIDE_SHORTCUT, |app, _, event| {
-            let state = app.state::<DesktopCardState>();
-            if !state.accept_shortcut(event.state) {
-                return; // Holding the keys must not repeatedly hide and reveal.
-            }
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(error) = toggle_desktop_card_visibility(app.clone()).await {
-                    use tauri_specta::Event;
-                    let _ = crate::events::Error {
-                        message: error.raw_detail.unwrap_or(error.code),
-                    }
-                    .emit(&app);
-                }
-            });
-        })
-        .map_err(|error| command_error(format!("Cannot register Ctrl+Shift+H: {error}")))
+    state.moving.store(false, Ordering::Release);
+    *state.origin.lock().unwrap() = None;
 }
 
 async fn fly(window: &WebviewWindow, from: i32, to: i32, y: i32) -> Result<(), CommandError> {
@@ -118,9 +94,18 @@ async fn animate_visibility(
     state: &DesktopCardState,
     visible: bool,
 ) -> Result<(), CommandError> {
-    // Hidden windows are parked at their original position after each flight.
-    // This also keeps the window-state plugin from saving offscreen coordinates.
-    let origin = window.outer_position().map_err(command_error)?;
+    let origin = if visible {
+        let remembered = *state.origin.lock().unwrap();
+        match remembered {
+            Some(position) => position,
+            None => window.outer_position().map_err(command_error)?,
+        }
+    } else {
+        let position = window.outer_position().map_err(command_error)?;
+        *state.origin.lock().unwrap() = Some(position);
+        save_desktop_card_position(window.app_handle());
+        position
+    };
     let monitors = window.available_monitors().map_err(command_error)?;
     let outside = offscreen_right(
         monitors
@@ -128,6 +113,7 @@ async fn animate_visibility(
             .map(|monitor| (monitor.position().x, monitor.size().width)),
         origin.x,
     );
+    state.moving.store(true, Ordering::Release);
     state.hidden.store(!visible, Ordering::Release);
     let result = async {
         if visible {
@@ -140,7 +126,8 @@ async fn animate_visibility(
         } else {
             fly(window, origin.x, outside, origin.y).await?;
             window.hide().map_err(command_error)?;
-            window.set_position(origin).map_err(command_error)?;
+            // Do not move a just-hidden native window back: hide is asynchronous
+            // on some compositors and that move caused a flash at the origin.
         }
         Ok(())
     }
@@ -151,6 +138,7 @@ async fn animate_visibility(
         let _ = window.show();
         state.hidden.store(false, Ordering::Release);
     }
+    state.moving.store(false, Ordering::Release);
     result
 }
 
@@ -206,8 +194,6 @@ where
 pub async fn show_desktop_card(app: AppHandle) -> Result<(), CommandError> {
     let state = app.state::<DesktopCardState>();
     let _operation = state.operation.lock().await;
-    // Register only while a card exists; shortcut conflicts are surfaced through IPC.
-    register_hide_shortcut(&app)?;
     if let Some(window) = app.get_webview_window(DESKTOP_CARD_WINDOW_LABEL) {
         if state.hidden.load(Ordering::Acquire) {
             animate_visibility(&window, &state, true).await?;
@@ -239,9 +225,32 @@ pub async fn show_desktop_card(app: AppHandle) -> Result<(), CommandError> {
     .center()
     .build()
     .map_err(command_error);
-    if let Err(error) = result {
-        let _ = app.global_shortcut().unregister(HIDE_SHORTCUT);
-        return Err(error);
+    let window = result?;
+    if let Ok(store) = app.store("desktop-window.json") {
+        if let Some(position) = store
+            .get("position")
+            .and_then(|v| serde_json::from_value::<[i32; 2]>(v).ok())
+        {
+            // A disconnected monitor must not strand the card outside the desktop.
+            if window
+                .available_monitors()
+                .unwrap_or_default()
+                .iter()
+                .any(|m| {
+                    let [x, y] = position;
+                    i64::from(x) >= i64::from(m.position().x)
+                        && i64::from(x) + 72
+                            <= i64::from(m.position().x) + i64::from(m.size().width)
+                        && i64::from(y) >= i64::from(m.position().y)
+                        && i64::from(y) + 48
+                            <= i64::from(m.position().y) + i64::from(m.size().height)
+                })
+            {
+                window
+                    .set_position(PhysicalPosition::new(position[0], position[1]))
+                    .map_err(command_error)?;
+            }
+        }
     }
     Ok(())
 }
@@ -274,12 +283,32 @@ pub async fn set_desktop_card_compact(
     let target_width = logical_to_physical(width, scale);
     let current_size = window.inner_size().map_err(command_error)?;
     let was_compact = current_size.height <= compact_height + 2;
-    let mut opens_above = false;
+    let mut opens_above = expanded_above && !compact && !was_compact;
 
     if compact || was_compact {
-        let position = window.outer_position().map_err(command_error)?;
+        let position = if state.hidden.load(Ordering::Acquire) {
+            let remembered = *state.origin.lock().unwrap();
+            match remembered {
+                Some(position) => position,
+                None => window.outer_position().map_err(command_error)?,
+            }
+        } else {
+            window.outer_position().map_err(command_error)?
+        };
         if !compact {
-            if let Some(monitor) = window.current_monitor().map_err(command_error)? {
+            if let Some(monitor) = window
+                .available_monitors()
+                .map_err(command_error)?
+                .into_iter()
+                .find(|m| {
+                    i64::from(position.x) >= i64::from(m.position().x)
+                        && i64::from(position.x)
+                            < i64::from(m.position().x) + i64::from(m.size().width)
+                        && i64::from(position.y) >= i64::from(m.position().y)
+                        && i64::from(position.y)
+                            < i64::from(m.position().y) + i64::from(m.size().height)
+                })
+            {
                 opens_above = should_expand_above(
                     position.y,
                     compact_height,
@@ -296,12 +325,15 @@ pub async fn set_desktop_card_compact(
         } else {
             position.y
         };
-        window
-            .set_position(PhysicalPosition::new(
-                anchored_window_left(position.x, current_size.width, target_width),
-                target_y,
-            ))
-            .map_err(command_error)?;
+        let target = PhysicalPosition::new(
+            anchored_window_left(position.x, current_size.width, target_width),
+            target_y,
+        );
+        if state.hidden.load(Ordering::Acquire) {
+            *state.origin.lock().unwrap() = Some(target);
+        } else {
+            window.set_position(target).map_err(command_error)?;
+        }
     }
     window
         .set_size(LogicalSize::new(width, height))
@@ -414,10 +446,11 @@ pub async fn open_desktop_card_host(
 pub async fn close_desktop_card(app: AppHandle) -> Result<(), CommandError> {
     let state = app.state::<DesktopCardState>();
     let _operation = state.operation.lock().await;
+    save_desktop_card_position(&app);
     if let Some(window) = app.get_webview_window(DESKTOP_CARD_WINDOW_LABEL) {
         window.close().map_err(command_error)?;
     }
-    reset_visibility(&app, &state)?;
+    // Destroyed clears visibility after CloseRequested has saved the visible origin.
     Ok(())
 }
 
@@ -430,15 +463,6 @@ mod tests {
     use std::cell::Cell;
 
     use super::*;
-
-    #[test]
-    fn holding_the_shortcut_toggles_once_and_a_new_press_can_restore() {
-        let state = DesktopCardState::default();
-        assert!(state.accept_shortcut(ShortcutState::Pressed));
-        assert!(!state.accept_shortcut(ShortcutState::Pressed));
-        assert!(!state.accept_shortcut(ShortcutState::Released));
-        assert!(state.accept_shortcut(ShortcutState::Pressed));
-    }
 
     #[test]
     fn desktop_card_has_a_stable_secondary_window_label() {

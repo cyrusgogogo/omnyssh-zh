@@ -59,6 +59,7 @@ function createTheme() {
   const { subscribe, set: setStore } = writable<Theme>(painted);
   let current = painted;
   let interacted = false;
+  let pending = Promise.resolve();
 
   // `user` marks a deliberate flip: it writes the canonical store and blocks a
   // late hydrate from reverting it. localStorage is mirrored either way, so the
@@ -71,7 +72,7 @@ function createTheme() {
     mirrorLocal(theme);
     if (user) {
       interacted = true;
-      void persistStore(theme);
+      pending = pending.then(() => persistStore(theme));
     }
     void syncNativeWindow(theme);
   }
@@ -80,6 +81,34 @@ function createTheme() {
     subscribe,
     set: (theme: Theme) => apply(theme, true),
     toggle: () => apply(current === 'dark' ? 'light' : 'dark', true),
+    /** Listen before hydration so both existing and newly opened webviews agree. */
+    startSync(): () => void {
+      let disposed = false;
+      let off: (() => void) | undefined;
+      let revision = 0;
+      const receive = (value: unknown) => {
+        if (disposed || (value !== 'light' && value !== 'dark')) return;
+        revision++;
+        if (value !== current) apply(value, false);
+      };
+      const storage = (event: StorageEvent) => {
+        if (event.key === LOCAL_KEY) receive(event.newValue);
+      };
+      window.addEventListener('storage', storage);
+      void (async () => {
+        try {
+          const { load } = await import('@tauri-apps/plugin-store');
+          const store = await load(STORE_FILE);
+          const unlisten = await store.onKeyChange<Theme>(STORE_KEY, receive);
+          if (disposed) { unlisten(); return; }
+          off = unlisten;
+          const beforeRead = revision;
+          const saved = await store.get<Theme>(STORE_KEY);
+          if (!interacted && revision === beforeRead) receive(saved);
+        } catch { /* Browser preview uses storage events. */ }
+      })();
+      return () => { disposed = true; off?.(); window.removeEventListener('storage', storage); };
+    },
     /** Reconcile with the canonical tauri-plugin-store value once the Tauri API is
      *  reachable (called from the layout's onMount). */
     async hydrate(): Promise<void> {

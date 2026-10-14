@@ -9,6 +9,17 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Features
+- Added persistent close behavior (quit or minimize to tray) and tray-click behavior (hide/show the desktop card or open the main window). Both actions remain available in the tray menu.
+- Added card/list overview views, sorting by default order, name, status, CPU, memory or disk usage, and ascending/descending order. View and sort preferences survive restarts.
+- Desktop-card shortcuts can now be recorded, changed, disabled, restored to Ctrl+Shift+H, or re-registered without restarting. Failed replacements keep the previous shortcut; conflicts no longer prevent opening the card.
+
+### Bug Fixes
+- Keep hidden cards offscreen until their return animation, eliminating the move-back flash after hiding. Preserve the visible position separately from animated coordinates.
+- Remove the extra shortcut key-down latch that could become stuck after a lost key-up event.
+- Smooth compact-card hover previews with delayed opening, animated reveal/collapse, and a pointer-leave grace period.
+- Synchronize theme changes across existing main and desktop-card windows immediately.
+
 ## 1.0.6 — 2026-10-09
 
 ### Features

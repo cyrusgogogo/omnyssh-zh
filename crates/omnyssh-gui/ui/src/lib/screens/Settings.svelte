@@ -4,6 +4,8 @@
   // update preferences (`check_on_startup`) + a manual update check. Update prefs persist
   // to the shared config via `save_update_config`; theme/interval are frontend prefs.
   import { onMount } from 'svelte';
+  import { desktopSettings, changeDesktopSettings, captureShortcut, shortcutLabel } from '$lib/stores/desktopSettings';
+  import type { DesktopSettingsDto } from '$lib/bindings';
   import type { UpdateConfigDto } from '$lib/bindings';
   import { Surface, Icon } from '$lib/theme';
   import { theme } from '$lib/stores/theme';
@@ -82,8 +84,36 @@
     }
   }
 
+  let desktopBusy = $state(false);
+  let desktopError = $state('');
+  let recording = $state(false);
+  let shortcutDraft = $state<string | null>(null);
+  let shortcutInput = $state<HTMLInputElement>();
+
+  async function saveDesktop(patch: Partial<DesktopSettingsDto>, retry = false): Promise<void> {
+    if (desktopBusy) return;
+    desktopBusy = true;
+    desktopError = '';
+    try {
+      await changeDesktopSettings(patch, retry);
+      shortcutDraft = null;
+      recording = false;
+    } catch (error) { desktopError = message(error); }
+    finally { desktopBusy = false; }
+  }
+
+  function recordShortcut(event: KeyboardEvent): void {
+    if (!recording || event.key === 'Tab') return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === 'Escape') { recording = false; shortcutDraft = null; return; }
+    if (event.repeat) return;
+    const captured = captureShortcut(event);
+    if (captured) { shortcutDraft = captured; recording = false; }
+  }
+
   const seg =
-    'rounded-lg px-3 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus';
+    'rounded-lg px-3 py-1.5 text-sm transition disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus';
   const segState = (active: boolean): string =>
     active ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-surface-inset hover:text-fg';
 </script>
@@ -170,15 +200,54 @@
     </Surface>
 
     <Surface class="p-5">
-      <h2 class="mb-3 text-sm font-semibold">{$t('desktop-card-title')}</h2>
-      <div class="flex items-center justify-between gap-4">
-        <div>
-          <p class="text-sm">{$t('settings-desktop-card-shortcut')}</p>
-          <p class="text-xs text-muted">{$t('settings-desktop-card-shortcut-description')}</p>
+      <h2 class="mb-4 text-sm font-semibold">{$t('settings-window-behavior')}</h2>
+      {#each [
+        { key: 'closeBehavior', title: 'settings-close-behavior', description: 'settings-close-description', options: [['quit', 'settings-close-quit'], ['tray', 'settings-close-tray']] },
+        { key: 'trayClickBehavior', title: 'settings-tray-behavior', description: 'settings-tray-description', options: [['toggleCard', 'settings-tray-card'], ['openMain', 'settings-tray-main']] }
+      ] as group}
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3 last:mb-0">
+          <div><p class="text-sm">{$t(group.title)}</p><p class="text-xs text-muted">{$t(group.description)}</p></div>
+          <div class="flex gap-1 rounded-xl bg-surface-inset p-1" role="group" aria-label={$t(group.title)}>
+            {#each group.options as option}
+              <button type="button" class="{seg} {segState($desktopSettings[group.key as 'closeBehavior' | 'trayClickBehavior'] === option[0])}"
+                disabled={desktopBusy} aria-pressed={$desktopSettings[group.key as 'closeBehavior' | 'trayClickBehavior'] === option[0]}
+                onclick={() => void saveDesktop({ [group.key]: option[0] })}>{$t(option[1])}</button>
+            {/each}
+          </div>
         </div>
-        <kbd class="shrink-0 rounded-lg border border-default bg-surface-inset px-3 py-1.5 text-xs">Ctrl+Shift+H</kbd>
-      </div>
+      {/each}
     </Surface>
+
+    <Surface class="p-5">
+      <h2 class="mb-3 text-sm font-semibold">{$t('desktop-card-title')}</h2>
+      <label for="desktop-shortcut" class="text-sm">{$t('settings-desktop-card-shortcut')}</label>
+      <p class="mt-1 text-xs text-muted">{$t('settings-desktop-card-shortcut-description')}</p>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <input id="desktop-shortcut" bind:this={shortcutInput} readonly disabled={desktopBusy}
+          value={recording ? $t('settings-shortcut-recording') : shortcutLabel(shortcutDraft ?? $desktopSettings.shortcut) || $t('settings-shortcut-disabled')}
+          class="min-w-0 flex-1 rounded-lg border border-default bg-surface-inset px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          onkeydown={recordShortcut} onblur={() => recording = false} />
+        <button type="button" class="{seg} border border-default" disabled={desktopBusy}
+          onclick={() => { recording = true; desktopError = ''; shortcutInput?.focus(); }}>{$t('settings-shortcut-record')}</button>
+        <button type="button" class="{seg} bg-accent text-accent-fg" disabled={desktopBusy || shortcutDraft === null}
+          onclick={() => void saveDesktop({ shortcut: shortcutDraft ?? '' }, true)}>{$t('common-save')}</button>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" class="{seg} text-muted hover:bg-surface-inset" disabled={desktopBusy}
+          onclick={() => void saveDesktop({ shortcut: 'Control+Shift+H' }, true)}>{$t('settings-shortcut-reset')}</button>
+        <button type="button" class="{seg} text-muted hover:bg-surface-inset" disabled={desktopBusy || !$desktopSettings.shortcut}
+          onclick={() => void saveDesktop({ shortcut: '' })}>{$t('settings-shortcut-disable')}</button>
+        <button type="button" class="{seg} text-muted hover:bg-surface-inset" disabled={desktopBusy || !$desktopSettings.shortcut}
+          onclick={() => void saveDesktop({}, true)}>{$t('settings-shortcut-retry')}</button>
+      </div>
+      <p class="mt-2 text-xs text-muted" role="status">
+        {$t(!$desktopSettings.shortcut ? 'settings-shortcut-disabled' : $desktopSettings.shortcutRegistered ? 'settings-shortcut-active' : 'settings-shortcut-unavailable')}
+      </p>
+      {#if $desktopSettings.shortcutError}
+        <p class="mt-2 break-words text-xs text-status-crit" role="alert">{$desktopSettings.shortcutError}</p>
+      {/if}
+    </Surface>
+    {#if desktopError}<p class="break-words text-sm text-status-crit" role="alert">{desktopError}</p>{/if}
 
     <!-- Privacy -->
     <Surface class="p-5">

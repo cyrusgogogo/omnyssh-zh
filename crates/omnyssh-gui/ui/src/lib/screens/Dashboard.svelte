@@ -6,6 +6,9 @@
   // (add/edit/delete, §4.1) lives here — there is no separate Hosts screen (§2).
   // Editing an SSH-config host adopts it into hosts.toml; the file itself is never
   // written, so only Delete stays manual-only.
+  import { onMount } from 'svelte';
+  import { overviewPreferences, SORT_OPTIONS, sortCards, type OverviewSort } from '$lib/stores/overview';
+  import type { ServerCard } from './serverCard';
   import { get } from 'svelte/store';
   import type { HostDto, HostInputDto } from '$lib/bindings';
   import { Surface, Chip, StatusDot, Icon, Button, statusToken } from '$lib/theme';
@@ -28,6 +31,7 @@
   import { emptyForm, formFromHost } from './hostForm';
   import HostEditor from './HostEditor.svelte';
   import Modal from '$lib/components/Modal.svelte';
+  import Select from '$lib/components/Select.svelte';
   import { t } from '$lib/i18n';
   import { desktopCardHosts } from '$lib/stores/desktopCards';
 
@@ -45,7 +49,8 @@
   const overviewCards = $derived(
     showHidden ? $serverCards : $serverCards.filter((card) => !card.host.hiddenFromOverview)
   );
-  const visibleCards = $derived(filterHosts(overviewCards, query));
+  const visibleCards = $derived(sortCards(filterHosts(overviewCards, query), $overviewPreferences.sort, $overviewPreferences.descending));
+  onMount(() => { void overviewPreferences.hydrate(); });
 
   function toggleSearch(): void {
     searchOpen = !searchOpen;
@@ -158,6 +163,132 @@
 
 <svelte:window onkeydown={onKeydown} />
 
+{#snippet hostIdentity(card: ServerCard)}
+            <div class="flex min-w-0 items-start gap-2.5">
+              <span class="mt-1 shrink-0">
+                <StatusDot status={card.overall} size={9} label={$t('dashboard-host-status', { host: card.host.name })} />
+              </span>
+              <div class="min-w-0">
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="truncate font-medium" title={card.host.name}>{card.host.name}</span>
+                  {#if card.host.source === 'sshConfig'}
+                    <span
+                      class="shrink-0 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
+                      title={$t('dashboard-import-description')}
+                    >
+                      {$t('dashboard-ssh-config')}
+                    </span>
+                  {:else}
+                    <span
+                      class="shrink-0 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
+                      title={$t('dashboard-omnyssh-description')}
+                    >
+                      {$t('dashboard-omnyssh-config')}
+                    </span>
+                  {/if}
+                  {#if card.host.hiddenFromOverview}
+                    <span class="shrink-0 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint">
+                      {$t('dashboard-hidden-badge')}
+                    </span>
+                  {/if}
+                  <!-- Auth-state reflection (tech-gui.md §4.2): key-only once password
+                       auth is disabled, otherwise a plain key badge when a key exists. -->
+                  {#if card.host.passwordAuthDisabled}
+                    <span
+                      class="inline-flex shrink-0 items-center gap-1 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
+                      title={$t('dashboard-key-only-description')}
+                    >
+                      <Icon name="shield" size={10} />
+                      {$t('dashboard-key-only')}
+                    </span>
+                  {:else if card.host.hasKey}
+                    <span
+                      class="inline-flex shrink-0 items-center gap-1 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
+                      title={$t('dashboard-key-description')}
+                    >
+                      <Icon name="key" size={10} />
+                      {$t('dashboard-key')}
+                    </span>
+                  {/if}
+                </div>
+                <div class="truncate font-mono text-xs text-faint">
+                  {card.host.user}@{displayHostname(card.host.hostname, $streamerMode)}:{card.host
+                    .port}
+                </div>
+              </div>
+            </div>
+{/snippet}
+
+{#snippet hostActions(card: ServerCard)}
+            <div class="flex flex-wrap items-center gap-1.5">
+              {#each QUICK_ACTIONS as action (action.id)}
+                <button
+                  type="button"
+                  class={pill}
+                  title={$t('dashboard-action-on-host', { action: action.label, host: card.host.name })}
+                  onclick={() => openHostSession(action.kind, card.host.name)}
+                >
+                  <Icon name={action.kind} size={13} />
+                  {action.kind === 'sftp' ? $t('nav-files') : action.label}
+                </button>
+              {/each}
+              <button
+                type="button"
+                class="{iconBtn} {$desktopCardHosts.includes(card.host.name)
+                  ? 'bg-surface-inset text-fg'
+                  : ''}"
+                title={$desktopCardHosts.includes(card.host.name)
+                  ? $t('desktop-card-remove', { host: card.host.name })
+                  : $t('desktop-card-add', { host: card.host.name })}
+                aria-label={$desktopCardHosts.includes(card.host.name)
+                  ? $t('desktop-card-remove', { host: card.host.name })
+                  : $t('desktop-card-add', { host: card.host.name })}
+                aria-pressed={$desktopCardHosts.includes(card.host.name)}
+                onclick={() => void toggleDesktopCard(card.host.name)}
+              >
+                <Icon name="desktop-card" size={14} />
+              </button>
+              <!-- Key setup stays manual-only even though edit no longer is: it records
+                   `key_setup_date`/`password_auth_disabled` through `save_hosts`, which
+                   keeps manual entries only — on an import that outcome would be dropped.
+                   Adopt the host first, then set up its key. -->
+              {#if card.host.source === 'manual' && !card.host.hasKey}
+                <button
+                  type="button"
+                  class={iconBtn}
+                  title={$t('dashboard-key-setup', { host: card.host.name })}
+                  aria-label={$t('dashboard-key-setup', { host: card.host.name })}
+                  onclick={() => setupKey(card.host)}
+                >
+                  <Icon name="key" size={14} />
+                </button>
+              {/if}
+              <!-- Editing an import adopts it into hosts.toml (§4.2); ~/.ssh/config is
+                   never written, so the action is offered whatever the source. Delete
+                   stays manual-only: there is nothing of an import to remove here. -->
+              <button
+                type="button"
+                class={iconBtn}
+                title={$t('dashboard-edit', { host: card.host.name })}
+                aria-label={$t('dashboard-edit', { host: card.host.name })}
+                onclick={() => (dialog = { kind: 'edit', host: card.host })}
+              >
+                <Icon name="edit" size={14} />
+              </button>
+              {#if card.host.source === 'manual'}
+                <button
+                  type="button"
+                  class={iconBtn}
+                  title={$t('dashboard-delete', { host: card.host.name })}
+                  aria-label={$t('dashboard-delete', { host: card.host.name })}
+                  onclick={() => (dialog = { kind: 'delete', host: card.host })}
+                >
+                  <Icon name="trash" size={14} />
+                </button>
+              {/if}
+            </div>
+{/snippet}
+
 <section class="min-h-full px-6 pb-8 pt-3">
   <div class="mb-5 flex items-center gap-3">
     <h1 class="text-lg font-semibold tracking-tight">{$t('dashboard-title')}</h1>
@@ -228,6 +359,28 @@
     </div>
   </div>
 
+  <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex gap-1 rounded-xl bg-surface-inset p-1" role="group" aria-label={$t('dashboard-view')}>
+      {#each ['cards', 'list'] as view}
+        <button type="button" class="rounded-lg px-3 py-1.5 text-sm transition focus-visible:ring-2 focus-visible:ring-focus {$overviewPreferences.view === view ? 'bg-surface-raised text-fg shadow-sm' : 'text-muted hover:text-fg'}"
+          aria-pressed={$overviewPreferences.view === view} onclick={() => overviewPreferences.change({ view: view as 'cards' | 'list' })}>
+          {$t(`dashboard-view-${view}`)}
+        </button>
+      {/each}
+    </div>
+    <div class="flex items-center gap-2 text-sm">
+      <label for="overview-sort" class="text-muted">{$t('dashboard-sort')}</label>
+      <Select id="overview-sort" class="rounded-lg border border-default bg-surface-raised px-3 py-1.5 text-fg focus-visible:ring-2 focus-visible:ring-focus"
+        value={$overviewPreferences.sort} onchange={(e) => overviewPreferences.change({ sort: e.currentTarget.value as OverviewSort })}>
+        {#each SORT_OPTIONS as sort}<option value={sort}>{$t(`dashboard-sort-${sort}`)}</option>{/each}
+      </Select>
+      <button type="button" class={pill} aria-label={$t('dashboard-sort-direction')} aria-pressed={$overviewPreferences.descending}
+        onclick={() => overviewPreferences.change({ descending: !$overviewPreferences.descending })}>
+        {$t($overviewPreferences.descending ? 'dashboard-sort-desc' : 'dashboard-sort-asc')}
+      </button>
+    </div>
+  </div>
+
   {#if $serverCards.length === 0}
     <div class="flex flex-col items-center justify-center gap-2 py-20 text-center">
       <p class="font-medium">{$t('dashboard-empty-title')}</p>
@@ -249,133 +402,41 @@
     <div class="flex flex-col items-center justify-center gap-2 py-20 text-center">
       <p class="text-sm text-muted">{$t('dashboard-no-query-results', { query })}</p>
     </div>
+  {:else if $overviewPreferences.view === 'list'}
+    <Surface class="overflow-x-auto">
+      <table class="w-full text-left text-sm" aria-label={$t('dashboard-view-list')}>
+        <thead class="border-b border-default bg-surface-inset text-xs text-muted">
+          <tr>
+            <th scope="col" class="px-5 py-3">{$t('dashboard-sort-name')}</th>
+            <th scope="col" class="px-3 py-3">{$t('dashboard-sort-status')}</th>
+            {#each ['CPU', 'RAM', 'Disk'] as metric}<th scope="col" class="px-3 py-3 text-right">{metric}</th>{/each}
+            <th scope="col" class="px-5 py-3">{$t('dashboard-actions')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each visibleCards as card (card.host.name)}
+            <tr class="border-b border-default last:border-0 hover:bg-surface-inset/50" data-host={card.host.name}>
+              <td class="min-w-56 max-w-80 px-5 py-4">{@render hostIdentity(card)}</td>
+              <td class="whitespace-nowrap px-3 py-4 text-xs" style="color: {statusToken(card.overall)}">{$t(`dashboard-health-${card.overall}`)}</td>
+              {#each ['CPU', 'RAM', 'Disk'] as metric}
+                {@const row = card.metricRows.find((r) => r.label === metric)}
+                <td class="px-3 py-4 text-right tabular-nums" style="color: {statusToken(row?.status ?? 'unknown')}">{row?.percent != null ? `${Math.round(row.percent)}%` : '—'}</td>
+              {/each}
+              <td class="min-w-64 px-5 py-4">{@render hostActions(card)}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </Surface>
   {:else}
     <div class="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(19rem,1fr))]">
-      {#each visibleCards as card, i (i)}
+      {#each visibleCards as card (card.host.name)}
         <Surface class="flex flex-col gap-4 p-5">
           <!-- Identity, then the actions on their own row so the name and address
                stay readable at any card width (a full row instead of sharing it). -->
           <div class="flex flex-col gap-3">
-            <div class="flex min-w-0 items-start gap-2.5">
-              <span class="mt-1 shrink-0">
-                <StatusDot status={card.overall} size={9} label={$t('dashboard-host-status', { host: card.host.name })} />
-              </span>
-              <div class="min-w-0">
-                <div class="flex min-w-0 items-center gap-2">
-                  <span class="truncate font-medium" title={card.host.name}>{card.host.name}</span>
-                  {#if card.host.source === 'sshConfig'}
-                    <span
-                      class="shrink-0 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
-                      title={$t('dashboard-import-description')}
-                    >
-                      {$t('dashboard-ssh-config')}
-                    </span>
-                  {:else}
-                    <span
-                      class="shrink-0 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
-                      title={$t('dashboard-omnyssh-description')}
-                    >
-                      {$t('dashboard-omnyssh-config')}
-                    </span>
-                  {/if}
-                  {#if card.host.hiddenFromOverview}
-                    <span class="shrink-0 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint">
-                      {$t('dashboard-hidden-badge')}
-                    </span>
-                  {/if}
-                  <!-- Auth-state reflection (tech-gui.md §4.2): key-only once password
-                       auth is disabled, otherwise a plain key badge when a key exists. -->
-                  {#if card.host.passwordAuthDisabled}
-                    <span
-                      class="inline-flex shrink-0 items-center gap-1 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
-                      title={$t('dashboard-key-only-description')}
-                    >
-                      <Icon name="shield" size={10} />
-                      {$t('dashboard-key-only')}
-                    </span>
-                  {:else if card.host.hasKey}
-                    <span
-                      class="inline-flex shrink-0 items-center gap-1 rounded-full border border-default px-1.5 py-0.5 text-[10px] text-faint"
-                      title={$t('dashboard-key-description')}
-                    >
-                      <Icon name="key" size={10} />
-                      {$t('dashboard-key')}
-                    </span>
-                  {/if}
-                </div>
-                <div class="truncate font-mono text-xs text-faint">
-                  {card.host.user}@{displayHostname(card.host.hostname, $streamerMode)}:{card.host
-                    .port}
-                </div>
-              </div>
-            </div>
-            <div class="flex flex-wrap items-center gap-1.5">
-              {#each QUICK_ACTIONS as action (action.id)}
-                <button
-                  type="button"
-                  class={pill}
-                  title={$t('dashboard-action-on-host', { action: action.label, host: card.host.name })}
-                  onclick={() => openHostSession(action.kind, card.host.name)}
-                >
-                  <Icon name={action.kind} size={13} />
-                  {action.kind === 'sftp' ? $t('nav-files') : action.label}
-                </button>
-              {/each}
-              <button
-                type="button"
-                class="{iconBtn} {$desktopCardHosts.includes(card.host.name)
-                  ? 'bg-surface-inset text-fg'
-                  : ''}"
-                title={$desktopCardHosts.includes(card.host.name)
-                  ? $t('desktop-card-remove', { host: card.host.name })
-                  : $t('desktop-card-add', { host: card.host.name })}
-                aria-label={$desktopCardHosts.includes(card.host.name)
-                  ? $t('desktop-card-remove', { host: card.host.name })
-                  : $t('desktop-card-add', { host: card.host.name })}
-                aria-pressed={$desktopCardHosts.includes(card.host.name)}
-                onclick={() => void toggleDesktopCard(card.host.name)}
-              >
-                <Icon name="desktop-card" size={14} />
-              </button>
-              <!-- Key setup stays manual-only even though edit no longer is: it records
-                   `key_setup_date`/`password_auth_disabled` through `save_hosts`, which
-                   keeps manual entries only — on an import that outcome would be dropped.
-                   Adopt the host first, then set up its key. -->
-              {#if card.host.source === 'manual' && !card.host.hasKey}
-                <button
-                  type="button"
-                  class={iconBtn}
-                  title={$t('dashboard-key-setup', { host: card.host.name })}
-                  aria-label={$t('dashboard-key-setup', { host: card.host.name })}
-                  onclick={() => setupKey(card.host)}
-                >
-                  <Icon name="key" size={14} />
-                </button>
-              {/if}
-              <!-- Editing an import adopts it into hosts.toml (§4.2); ~/.ssh/config is
-                   never written, so the action is offered whatever the source. Delete
-                   stays manual-only: there is nothing of an import to remove here. -->
-              <button
-                type="button"
-                class={iconBtn}
-                title={$t('dashboard-edit', { host: card.host.name })}
-                aria-label={$t('dashboard-edit', { host: card.host.name })}
-                onclick={() => (dialog = { kind: 'edit', host: card.host })}
-              >
-                <Icon name="edit" size={14} />
-              </button>
-              {#if card.host.source === 'manual'}
-                <button
-                  type="button"
-                  class={iconBtn}
-                  title={$t('dashboard-delete', { host: card.host.name })}
-                  aria-label={$t('dashboard-delete', { host: card.host.name })}
-                  onclick={() => (dialog = { kind: 'delete', host: card.host })}
-                >
-                  <Icon name="trash" size={14} />
-                </button>
-              {/if}
-            </div>
+            {@render hostIdentity(card)}
+            {@render hostActions(card)}
           </div>
 
           <!-- Reachability, live metrics, or an offline state -->

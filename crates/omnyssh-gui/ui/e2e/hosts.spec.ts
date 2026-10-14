@@ -50,6 +50,8 @@ async function boot(page: Page): Promise<void> {
       (win as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {
         invoke: (cmd: string, args: Record<string, unknown>) => {
           switch (cmd) {
+            case 'load_desktop_settings':
+              return Promise.resolve({ closeBehavior: 'tray', trayClickBehavior: 'openMain', shortcut: 'Control+Shift+H', shortcutRegistered: true, shortcutError: null });
             case 'list_hosts':
               return Promise.resolve([...state.hosts]);
             case 'get_ssh_key_snapshot':
@@ -375,7 +377,7 @@ test('desktop card hide button uses the native toggle and keeps the selected hos
   await boot(page);
   await page.getByRole('button', { name: 'Add web-1 to the desktop card' }).click();
   await page.goto('/?view=desktop-card');
-  const hide = page.getByRole('button', { name: 'Hide desktop card (Ctrl+Shift+H)' });
+  const hide = page.getByRole('button', { name: 'Hide desktop card', exact: true });
   await expect(hide).toHaveAttribute('aria-keyshortcuts', 'Control+Shift+H');
   await hide.click();
   await expect.poll(() => page.evaluate(() =>
@@ -574,4 +576,36 @@ test('rejects a new host whose name already exists', async ({ page }) => {
   // The editor stays open with an inline error rather than clobbering the existing host.
   await expect(editor).toBeVisible();
   await expect(editor.getByText(/A host named .*web-1.* already exists/)).toBeVisible();
+});
+
+test('overview list preserves host actions, sorts naturally and remembers preferences after reload', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: 'List', exact: true }).click();
+  const rows = page.locator('tbody tr');
+  await expect(rows).toHaveCount(2);
+  await page.getByLabel('Sort by', { exact: true }).selectOption('name');
+  await expect(rows.first()).toHaveAttribute('data-host', 'imported');
+  await page.getByRole('button', { name: 'Sort direction', exact: true }).click();
+  await expect(rows.first()).toHaveAttribute('data-host', 'web-1');
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'List', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('Sort by', { exact: true })).toHaveValue('name');
+  await expect(rows.first()).toHaveAttribute('data-host', 'web-1');
+  await page.screenshot({ path: test.info().outputPath('overview-list.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Edit web-1', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+});
+
+test('open desktop card follows theme changes from another webview', async ({ page, context }) => {
+  await boot(page);
+  await page.getByRole('button', { name: 'Add web-1 to the desktop card' }).click();
+  const card = await context.newPage();
+  await card.goto('/?view=desktop-card');
+  await expect(card.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Light', exact: true }).click();
+  await expect(card.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: 'Dark', exact: true }).click();
+  await expect(card.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await card.close();
 });

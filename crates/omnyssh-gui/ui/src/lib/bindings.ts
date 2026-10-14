@@ -478,6 +478,17 @@ async restoreSshKey(backupId: string) : Promise<Result<SshKeyRecordDto, CommandE
     else return { status: "error", error: e  as any };
 }
 },
+async loadDesktopSettings() : Promise<DesktopSettingsDto> {
+    return await TAURI_INVOKE("load_desktop_settings");
+},
+async saveDesktopSettings(settings: DesktopSettingsDto, retryShortcut: boolean) : Promise<Result<DesktopSettingsDto, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_desktop_settings", { settings, retryShortcut }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async loadTerminalOpenMode() : Promise<Result<string, CommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("load_terminal_open_mode") };
@@ -621,12 +632,14 @@ updateAvailable: "update-available"
 
 /** user-defined types **/
 
+export type CloseBehavior = "quit" | "tray"
 export type CommandError = { code: string; args: Partial<{ [key in string]: string }>; rawDetail: string | null }
 /**
  * Live connection state for a host (tech-gui.md §4.1). Internally tagged so the
  * frontend consumes a discriminated union keyed on `kind`.
  */
 export type ConnectionStatusDto = { kind: "unknown" } | { kind: "connecting" } | { kind: "connected" } | { kind: "failed"; message: string }
+export type DesktopSettingsDto = { closeBehavior: CloseBehavior; trayClickBehavior: TrayClickBehavior; shortcut: string; shortcutRegistered: boolean; shortcutError: string | null }
 export type DiscoveredSshKeyDto = { privatePath: string; publicPath: string; suggestedName: string; keyType: string }
 /**
  * A background error surfaced to the user.
@@ -825,6 +838,7 @@ export type TransferProgress = TransferProgressDto
  * remote size could not be determined).
  */
 export type TransferProgressDto = { sessionId: number; transferId: number; done: number; total: number }
+export type TrayClickBehavior = "toggleCard" | "openMain"
 /**
  * A newer release was found by the startup check (tech-gui.md §4.3). Mapped by the
  * shared engine bridge from `CoreEvent::UpdateAvailable`; drives the update banner.
