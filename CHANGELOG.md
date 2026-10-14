@@ -9,6 +9,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+Includes the close/tray settings, overview views and sorting, configurable shortcuts, animation fixes, and live theme synchronization introduced in 1.0.7.
+
+### Bug Fixes
+- Restore the desktop card by its horizontal center so restarting in dot mode keeps its position instead of shifting it on each launch.
+
 ## 1.0.7 — 2026-10-14
 
 ### Features

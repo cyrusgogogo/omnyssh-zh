@@ -47,9 +47,21 @@ pub fn save_desktop_card_position(app: &AppHandle) {
         app.get_webview_window(DESKTOP_CARD_WINDOW_LABEL)
             .and_then(|w| w.outer_position().ok())
     };
-    if let (Some(position), Ok(store)) = (position, app.store("desktop-window.json")) {
-        store.set("position", serde_json::json!([position.x, position.y]));
-        let _ = store.save();
+    if let (Some(position), Some(window), Ok(store)) = (
+        position,
+        app.get_webview_window(DESKTOP_CARD_WINDOW_LABEL),
+        app.store("desktop-window.json"),
+    ) {
+        if let Ok(size) = window.inner_size() {
+            // The next window starts expanded, even when the saved preference is
+            // dots. Persist its centre so that the initial compact resize cannot
+            // add half the width difference to its position on every restart.
+            store.set(
+                "geometry",
+                serde_json::json!([position.x, position.y, size.width]),
+            );
+            let _ = store.save();
+        }
     }
 }
 
@@ -227,22 +239,31 @@ pub async fn show_desktop_card(app: AppHandle) -> Result<(), CommandError> {
     .map_err(command_error);
     let window = result?;
     if let Ok(store) = app.store("desktop-window.json") {
-        if let Some(position) = store
-            .get("position")
-            .and_then(|v| serde_json::from_value::<[i32; 2]>(v).ok())
+        if let Some((left, top, width)) = store
+            .get("geometry")
+            .and_then(|v| serde_json::from_value::<(i32, i32, u32)>(v).ok())
         {
+            let position = [
+                anchored_window_left(
+                    left,
+                    width,
+                    window.inner_size().map_err(command_error)?.width,
+                ),
+                top,
+            ];
             // A disconnected monitor must not strand the card outside the desktop.
             if window
                 .available_monitors()
                 .unwrap_or_default()
                 .iter()
                 .any(|m| {
-                    let [x, y] = position;
-                    i64::from(x) >= i64::from(m.position().x)
-                        && i64::from(x) + 72
-                            <= i64::from(m.position().x) + i64::from(m.size().width)
-                        && i64::from(y) >= i64::from(m.position().y)
-                        && i64::from(y) + 48
+                    // A dot strip beside the left edge can temporarily place the
+                    // expanded window beyond that edge; its centre is still valid.
+                    let center = i64::from(left) + i64::from(width) / 2;
+                    center >= i64::from(m.position().x)
+                        && center < i64::from(m.position().x) + i64::from(m.size().width)
+                        && i64::from(top) >= i64::from(m.position().y)
+                        && i64::from(top) + 48
                             <= i64::from(m.position().y) + i64::from(m.size().height)
                 })
             {
@@ -463,6 +484,19 @@ mod tests {
     use std::cell::Cell;
 
     use super::*;
+
+    #[test]
+    fn compact_position_survives_reopening_through_an_expanded_window() {
+        for (left, compact_width, expanded_width) in
+            [(-1700, 88, 380), (500, 110, 475), (-1234, 97, 418)]
+        {
+            let restored = anchored_window_left(left, compact_width, expanded_width);
+            assert_eq!(
+                anchored_window_left(restored, expanded_width, compact_width),
+                left
+            );
+        }
+    }
 
     #[test]
     fn desktop_card_has_a_stable_secondary_window_label() {
