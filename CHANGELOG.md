@@ -9,6 +9,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 1.0.7 — 2026-10-14
+
 ### Features
 - Added persistent close behavior (quit or minimize to tray) and tray-click behavior (hide/show the desktop card or open the main window). Both actions remain available in the tray menu.
 - Added card/list overview views, sorting by default order, name, status, CPU, memory or disk usage, and ascending/descending order. View and sort preferences survive restarts.
