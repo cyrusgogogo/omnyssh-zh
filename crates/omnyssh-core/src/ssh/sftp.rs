@@ -505,7 +505,9 @@ mod metadata_tests {
         let path = dir.path().join("notes.txt");
         std::fs::write(&path, b"hello").unwrap();
         let modified = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
-        std::fs::File::open(&path)
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
             .unwrap()
             .set_modified(modified)
             .unwrap();
