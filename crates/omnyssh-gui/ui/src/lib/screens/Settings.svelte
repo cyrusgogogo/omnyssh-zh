@@ -200,6 +200,36 @@
     </Surface>
 
     <Surface class="p-5">
+      <h2 class="mb-3 text-sm font-semibold">SFTP</h2>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-sm">{$t('settings-sftp-open-mode')}</p>
+          <p class="text-xs text-muted">{$t('settings-sftp-open-description')}</p>
+        </div>
+        <div class="flex shrink-0 gap-1 rounded-xl bg-surface-inset p-1" role="group" aria-label={$t('settings-sftp-open-mode')}>
+          {#each ['main', 'card'] as mode}
+            <button type="button" class="{seg} {segState($desktopSettings.sftpOpenMode === mode)}"
+              disabled={desktopBusy} aria-pressed={$desktopSettings.sftpOpenMode === mode}
+              onclick={() => void saveDesktop({ sftpOpenMode: mode as 'main' | 'card' })}
+            >{$t(`settings-sftp-${mode}`)}</button>
+          {/each}
+        </div>
+      </div>
+      <label class="mt-4 flex items-center justify-between gap-4 border-t border-default pt-4">
+        <span>
+          <span class="block text-sm">{$t('settings-sftp-close-on-blur')}</span>
+          <span class="block text-xs text-muted">{$t('settings-sftp-close-on-blur-description')}</span>
+        </span>
+        <input type="checkbox" role="switch"
+          class="h-4 w-4 shrink-0 accent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-40"
+          aria-label={$t('settings-sftp-close-on-blur')}
+          checked={$desktopSettings.sftpCardCloseOnBlur}
+          disabled={desktopBusy || $desktopSettings.sftpOpenMode !== 'card'}
+          onchange={(event) => void saveDesktop({ sftpCardCloseOnBlur: event.currentTarget.checked })} />
+      </label>
+    </Surface>
+
+    <Surface class="p-5">
       <h2 class="mb-4 text-sm font-semibold">{$t('settings-window-behavior')}</h2>
       {#each [
         { key: 'closeBehavior', title: 'settings-close-behavior', description: 'settings-close-description', options: [['quit', 'settings-close-quit'], ['tray', 'settings-close-tray']] },

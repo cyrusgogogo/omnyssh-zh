@@ -4,7 +4,7 @@
 //! arrive as events. Local filesystem listing/preview return directly — the GUI never
 //! emits `LocalDirListed` (§4.3).
 
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tokio::sync::mpsc;
 
 use omnyssh_core::event::CoreEvent;
@@ -29,6 +29,7 @@ const SFTP_EVENT_BUFFER: usize = 256;
 #[specta::specta]
 pub async fn sftp_open(
     app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, GuiState>,
     host_name: String,
 ) -> Result<u64, CommandError> {
@@ -42,7 +43,12 @@ pub async fn sftp_open(
     let manager = SftpManager::connect(&host, tx)
         .await
         .map_err(|e| CommandError::new("sftp-open", e.to_string()))?;
-    let session_id = state.register_sftp(manager);
+    let session_id = if super::sftp_card::is_sftp_card(window.label()) {
+        app.state::<super::sftp_card::SftpCardState>()
+            .register_session(window.label(), &state, manager)?
+    } else {
+        state.register_sftp(manager)
+    };
     tauri::async_runtime::spawn(bridge::forward_sftp_events(app, session_id, rx));
     Ok(session_id)
 }

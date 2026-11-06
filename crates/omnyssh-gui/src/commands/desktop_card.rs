@@ -14,6 +14,7 @@ use tokio::sync::Mutex;
 
 use super::settings::{load_terminal_open_mode, open_system_terminal};
 use crate::desktop_card_motion::{offscreen_right, position_at, DURATION_MS};
+use crate::desktop_preferences::{DesktopPreferences, SftpOpenMode};
 use crate::dto::HostRuntimeSnapshotDto;
 use crate::error::CommandError;
 use crate::state::GuiState;
@@ -415,8 +416,8 @@ pub async fn set_desktop_card_always_on_top(
 }
 
 /// Open the selected host without creating sessions in the compact-card webview.
-/// System-terminal actions can launch directly; embedded terminals and SFTP must
-/// live in the main webview so closing the card cannot leave an invisible tab.
+/// System terminals and SFTP cards launch directly. Embedded sessions live in the
+/// main webview so closing the host card cannot leave an invisible tab.
 #[tauri::command]
 #[specta::specta]
 pub async fn open_desktop_card_host(
@@ -436,6 +437,12 @@ pub async fn open_desktop_card_host(
             "desktop-card",
             format!("unknown host '{host_name}'"),
         ));
+    }
+
+    if kind == "sftp"
+        && app.state::<DesktopPreferences>().snapshot().sftp_open_mode == SftpOpenMode::Card
+    {
+        return super::sftp_card::open_sftp_card(app, state, host_name).await;
     }
 
     let target = if kind == "terminal" {

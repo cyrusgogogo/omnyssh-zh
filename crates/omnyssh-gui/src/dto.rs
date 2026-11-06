@@ -377,6 +377,8 @@ pub struct FileEntryDto {
     pub path: String,
     pub size: u64,
     pub is_dir: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modified: Option<u64>,
 }
 
 /// Live progress for one SFTP upload/download (tech-gui.md §4.1). The GUI allocates
@@ -784,6 +786,7 @@ impl From<&FileEntry> for FileEntryDto {
             path: entry.path.clone(),
             size: entry.size,
             is_dir: entry.is_dir,
+            modified: entry.modified,
         }
     }
 }
@@ -1164,18 +1167,21 @@ mod tests {
             path: "/etc/omnyssh/config.toml".to_string(),
             size: 4096,
             is_dir: false,
+            modified: Some(1_700_000_000),
         };
         let dto = FileEntryDto::from(&file);
         assert_eq!(dto.name, "config.toml");
         assert_eq!(dto.path, "/etc/omnyssh/config.toml");
         assert_eq!(dto.size, 4096);
         assert!(!dto.is_dir);
+        assert_eq!(dto.modified, Some(1_700_000_000));
 
         let dir = FileEntry {
             name: "..".to_string(),
             path: "/etc".to_string(),
             size: 0,
             is_dir: true,
+            modified: None,
         };
         let dto = FileEntryDto::from(&dir);
         assert!(dto.is_dir);
@@ -1191,6 +1197,7 @@ mod tests {
             path: "/srv".to_string(),
             size: 0,
             is_dir: true,
+            modified: None,
         }))
         .expect("serialise FileEntryDto");
         assert_eq!(

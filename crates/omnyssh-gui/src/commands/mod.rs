@@ -6,6 +6,7 @@ pub mod hosts;
 pub mod keysetup;
 pub mod settings;
 pub mod sftp;
+pub mod sftp_card;
 pub mod snippets;
 pub mod ssh_config;
 pub mod ssh_keys;

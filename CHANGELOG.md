@@ -9,6 +9,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Features
+- SFTP file lists now show file types and modification times. Both panes support name, modification time, type and size sorting in either direction, remember their own choices, and keep the parent directory and folders first.
+- Expanded desktop host cards automatically hide their upper-right window controls until hovered or focused with the keyboard.
+- Added a separate desktop SFTP card that opens directly without bringing up the main window. Settings can select the opening mode and whether clicking outside closes the card; closing a card releases its SFTP connections.
+
 ## 1.0.8 — 2026-10-14
 
 Includes the close/tray settings, overview views and sorting, configurable shortcuts, animation fixes, and live theme synchronization introduced in 1.0.7.

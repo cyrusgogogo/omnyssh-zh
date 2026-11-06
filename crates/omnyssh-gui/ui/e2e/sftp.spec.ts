@@ -12,7 +12,7 @@ const HOSTS = [
   { name: 'db-1', hostname: 'db-1.example.com', user: 'root', port: 22, tags: [], source: 'manual', hasKey: false }
 ];
 
-async function boot(page: Page): Promise<void> {
+async function boot(page: Page, path = '/'): Promise<void> {
   await page.addInitScript(
     ({ hosts }) => {
       let cbid = 0;
@@ -20,15 +20,18 @@ async function boot(page: Page): Promise<void> {
       const listeners: Record<string, number[]> = {};
       let nextSession = 0;
       let nextTransfer = 0;
+      let preferences = { closeBehavior: 'tray', trayClickBehavior: 'openMain', shortcut: '', shortcutRegistered: false, shortcutError: null, sftpOpenMode: 'main', sftpCardCloseOnBlur: true };
+      win.__cardClosed = false;
       // A pending transfer holds until the test fires its op-done, so the progress bar
       // is observable mid-flight (the core is sequential — one transfer at a time).
       const completions: Array<() => void> = [];
 
-      type Entry = { name: string; path: string; size: number; isDir: boolean };
+      type Entry = { name: string; path: string; size: number; isDir: boolean; modified?: number };
       const local: Record<string, Entry[]> = {
         '/home/user': [
-          { name: 'notes.txt', path: '/home/user/notes.txt', size: 24, isDir: false },
-          { name: 'work', path: '/home/user/work', size: 0, isDir: true }
+          { name: 'notes.txt', path: '/home/user/notes.txt', size: 24, isDir: false, modified: 1_700_000_000 },
+          { name: 'work', path: '/home/user/work', size: 0, isDir: true, modified: 1_700_000_100 },
+          { name: 'a.log', path: '/home/user/a.log', size: 8, isDir: false, modified: 1_700_000_200 }
         ]
       };
       const remote: Record<string, Entry[]> = {
@@ -70,6 +73,18 @@ async function boot(page: Page): Promise<void> {
         invoke: (cmd: string, args: Record<string, unknown>) => {
           if (cmd.startsWith('plugin:path')) return Promise.resolve('/home/user');
           switch (cmd) {
+            case 'load_desktop_settings':
+              return Promise.resolve(preferences);
+            case 'save_desktop_settings':
+              preferences = { ...preferences, ...(args.settings as typeof preferences) };
+              fireEvent('desktop-settings-changed', preferences);
+              return Promise.resolve(preferences);
+            case 'open_sftp_card':
+              win.__openedSftpCard = args.hostName;
+              return Promise.resolve(null);
+            case 'close_sftp_card':
+              win.__cardClosed = true;
+              return Promise.resolve(null);
             case 'list_hosts':
               return Promise.resolve(hosts);
             case 'reload_hosts':
@@ -135,8 +150,8 @@ async function boot(page: Page): Promise<void> {
     { hosts: HOSTS }
   );
 
-  await page.goto('/');
-  await expect(page.getByText('2 hosts')).toBeVisible();
+  await page.goto(path);
+  if (path === '/') await expect(page.getByText('2 hosts')).toBeVisible();
 }
 
 test('host-first: a card’s files opens SFTP and browses both sides', async ({ page }) => {
@@ -196,7 +211,7 @@ test('an inactive tab’s modal never overlays another entity (§2 exactly-one-a
 
   // Open db-1's New-folder modal. The modal scrim traps the sidebar, so the ⌘K
   // navigator is the reachable way to switch entity while a modal is open.
-  await page.getByRole('button', { name: 'Folder' }).click();
+  await page.getByRole('button', { name: 'Folder', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'New folder' })).toBeVisible();
   await page.keyboard.press('Control+k');
   const palette = page.getByRole('dialog', { name: 'Command palette' });
@@ -218,4 +233,55 @@ test('action-first: the SFTP spawner opens the host picker, then a live session'
 
   await expect(page.getByRole('button', { name: 'web-1 · sftp', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'web-1' }).getByText('config.yml')).toBeVisible();
+});
+
+test('file metadata, sorting, marks and remembered pane preferences', async ({ page }) => {
+  await boot(page);
+  await page.getByTitle('files on web-1').click();
+  const local = page.getByRole('region', { name: 'Local' });
+  const remote = page.getByRole('region', { name: 'web-1' });
+  await expect(local.getByText('TXT file')).toBeVisible();
+  await expect(local.locator('button[title="notes.txt"]')).toContainText('2023');
+  await local.getByRole('checkbox', { name: 'Mark notes.txt' }).click();
+  await local.getByRole('combobox', { name: 'Sort by' }).selectOption('size');
+  await local.getByRole('button', { name: 'Sort descending' }).click();
+  const rows = local.locator('ul > li > button[title]');
+  await expect(rows.nth(0)).toHaveAttribute('title', '..');
+  await expect(rows.nth(1)).toHaveAttribute('title', 'work');
+  await expect(rows.nth(2)).toHaveAttribute('title', 'notes.txt');
+  await expect(local.getByRole('checkbox', { name: 'Mark notes.txt' })).toHaveAttribute('aria-checked', 'true');
+  await expect(remote.getByRole('combobox', { name: 'Sort by' })).toHaveValue('name');
+  await page.getByRole('button', { name: 'Refresh local files' }).click();
+  await expect(rows.nth(2)).toHaveAttribute('title', 'notes.txt');
+  await page.reload();
+  await page.getByTitle('files on web-1').click();
+  await expect(local.getByRole('combobox', { name: 'Sort by' })).toHaveValue('size');
+  await expect(local.getByRole('button', { name: 'Sort descending' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('card preference opens SFTP without adding a main-window session', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Separate card', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Separate card', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+  await page.getByTitle('files on web-1').click();
+  await expect.poll(() => page.evaluate(() => (window as any).__openedSftpCard)).toBe('web-1');
+  await expect(page.getByRole('button', { name: 'web-1 · sftp', exact: true })).toHaveCount(0);
+});
+
+test('standalone card browses both panes and Escape closes dialogs before the card', async ({ page }) => {
+  await page.setViewportSize({ width: 720, height: 480 });
+  await boot(page, '/?view=sftp-card&host=web-1');
+  await expect(page.getByRole('main', { name: 'SFTP card' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Local' }).getByText('notes.txt')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'web-1' }).getByText('config.yml')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Folder', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'New folder' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__cardClosed)).toBe(false);
+  await page.keyboard.press('Escape');
+  await expect.poll(() => page.evaluate(() => (window as any).__cardClosed)).toBe(true);
 });

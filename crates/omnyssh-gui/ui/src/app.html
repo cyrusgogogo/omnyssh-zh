@@ -9,8 +9,9 @@
       // localStorage copy the theme store keeps; defaults to dark (tech-gui.md §5.1).
       (function () {
         try {
-          if (new URLSearchParams(location.search).get('view') === 'desktop-card') {
-            document.documentElement.setAttribute('data-window', 'desktop-card');
+          var view = new URLSearchParams(location.search).get('view');
+          if (view === 'desktop-card' || view === 'sftp-card') {
+            document.documentElement.setAttribute('data-window', view);
           }
         } catch (e) {}
         try {

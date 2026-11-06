@@ -29,6 +29,8 @@ pub struct FileEntry {
     pub size: u64,
     /// `true` when this entry is a directory.
     pub is_dir: bool,
+    /// Last modification time as Unix seconds, absent when unavailable.
+    pub modified: Option<u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +238,7 @@ async fn do_list_dir(
             path: parent_str.to_string(),
             size: 0,
             is_dir: true,
+            modified: None,
         });
     }
 
@@ -255,6 +258,7 @@ async fn do_list_dir(
             path: full_path,
             size: meta.size.unwrap_or(0),
             is_dir: ft.is_dir(),
+            modified: meta.mtime.map(u64::from),
         });
     }
 
@@ -423,6 +427,7 @@ pub async fn list_local_dir(path: &str) -> anyhow::Result<Vec<FileEntry>> {
             path: parent_str.to_string(),
             size: 0,
             is_dir: true,
+            modified: None,
         });
     }
 
@@ -435,6 +440,11 @@ pub async fn list_local_dir(path: &str) -> anyhow::Result<Vec<FileEntry>> {
         let is_dir = file_type.as_ref().map(|ft| ft.is_dir()).unwrap_or(false);
         let meta = entry.metadata().await.ok();
         let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let modified = meta
+            .as_ref()
+            .and_then(|m| m.modified().ok())
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|duration| duration.as_secs());
 
         let name = entry.file_name().to_string_lossy().into_owned();
         let path_str = entry.path().to_string_lossy().into_owned();
@@ -444,6 +454,7 @@ pub async fn list_local_dir(path: &str) -> anyhow::Result<Vec<FileEntry>> {
             path: path_str,
             size,
             is_dir,
+            modified,
         });
     }
 
@@ -482,4 +493,36 @@ pub async fn preview_local_file(path: &str) -> anyhow::Result<String> {
         .context("read local preview bytes")?;
     buf.truncate(n);
     Ok(String::from_utf8_lossy(&buf).into_owned())
+}
+
+#[cfg(test)]
+mod metadata_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn local_listing_carries_real_modification_times() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.txt");
+        std::fs::write(&path, b"hello").unwrap();
+        let modified = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        std::fs::File::open(&path)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        std::fs::create_dir(dir.path().join("work")).unwrap();
+
+        let entries = list_local_dir(dir.path().to_str().unwrap()).await.unwrap();
+        let file = entries.iter().find(|e| e.name == "notes.txt").unwrap();
+        assert_eq!(file.modified, Some(1_700_000_000));
+        assert_eq!(file.size, 5);
+        assert!(!file.is_dir);
+        assert!(entries
+            .iter()
+            .find(|e| e.name == "work")
+            .unwrap()
+            .modified
+            .is_some());
+        assert_eq!(entries[0].name, "..");
+        assert_eq!(entries[0].modified, None);
+    }
 }

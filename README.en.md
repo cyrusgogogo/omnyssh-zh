@@ -67,6 +67,8 @@ Full PTY sessions in tabs. Open as many servers as you need, switch between them
 ### Two panel SFTP
 Local on the left, remote on the right. Tick the files you want and move them across, watch the progress bar, select many at once. Nobody remembers `scp -r` syntax anyway.
 
+Both panes show file types and modification times and remember their own name, modification time, type or size sorting in either direction. The parent directory and folders stay first. In **Settings → SFTP**, choose the main window or a separate desktop card. Card mode opens directly from the dashboard, host picker or desktop host card without bringing up the main window. Clicking outside closes it by default; this behavior is configurable. Expanded desktop host cards reveal their upper-right window controls on hover or keyboard focus.
+
 ### Snippets
 Save the commands you paste every week. Pick a snippet, tick the hosts to send it to, and it runs on all of them at once. Snippets take parameters, so `sudo systemctl restart {{service}}` asks you for the name.
 

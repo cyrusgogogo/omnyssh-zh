@@ -213,6 +213,17 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
   await expect(page.getByRole('button', { name: 'Remove web-1 from the desktop card' })).toHaveCount(0);
   await expect(page.locator('[data-tauri-drag-region="deep"]')).toHaveCount(1);
   const cardFrame = page.locator('main > section');
+  const windowActions = page.locator('[data-desktop-card-window-actions]');
+  await page.mouse.move(-1, -1);
+  await expect(windowActions).toHaveCSS('opacity', '0');
+  await cardFrame.hover();
+  await expect(windowActions).toHaveCSS('opacity', '1');
+  await page.mouse.move(-1, -1);
+  await expect(windowActions).toHaveCSS('opacity', '0');
+  await windowActions.getByRole('button').first().focus();
+  await expect(windowActions).toHaveCSS('opacity', '1');
+  await windowActions.getByRole('button').first().evaluate((element) => (element as HTMLElement).blur());
+  await expect(windowActions).toHaveCSS('opacity', '0');
   await expect
     .poll(() => cardFrame.evaluate((element) => getComputedStyle(element).boxShadow))
     .toBe('none');
@@ -251,6 +262,7 @@ test('desktop card keeps several hosts but displays one at a time', async ({ pag
   ).toBeLessThan(6);
 
   const pin = page.getByRole('button', { name: 'Stop keeping the desktop card on top' });
+  await cardFrame.hover();
   await expect(pin).toHaveAttribute('aria-pressed', 'true');
   await expect(pin).toHaveClass(/bg-accent/);
   await pin.click();

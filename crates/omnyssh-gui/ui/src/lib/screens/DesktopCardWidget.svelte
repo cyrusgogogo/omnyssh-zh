@@ -325,6 +325,7 @@
             {/each}
           </nav>
         {/if}
+        <div class="desktop-card-window-actions flex items-center" data-desktop-card-window-actions>
         <button
           type="button"
           class="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-surface-inset hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
@@ -368,6 +369,7 @@
         >
           <Icon name="close" size={14} />
         </button>
+        </div>
       </div>
     {/if}
 
@@ -527,6 +529,22 @@
 </main>
 
 <style>
+  .desktop-card-window-actions {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms;
+  }
+  section:hover .desktop-card-window-actions,
+  section:focus-within .desktop-card-window-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  @media (hover: none) {
+    .desktop-card-window-actions { opacity: 1; pointer-events: auto; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .desktop-card-window-actions { transition: none; }
+  }
   /* Animate inside the enlarged transparent native bounds. The window shrinks
      only after the exit, so the compositor never clips an outgoing detail. */
   section[data-mode='compact-detail'] {

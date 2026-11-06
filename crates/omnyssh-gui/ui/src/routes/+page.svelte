@@ -20,9 +20,11 @@
   import TerminalView from '$lib/screens/TerminalView.svelte';
   import SftpView from '$lib/screens/SftpView.svelte';
   import DesktopCardWidget from '$lib/screens/DesktopCardWidget.svelte';
+  import SftpCardWidget from '$lib/screens/SftpCardWidget.svelte';
   import { desktopCardHosts } from '$lib/stores/desktopCards';
 
   onMount(async () => {
+    if (new URLSearchParams(window.location.search).get('view') === 'sftp-card') return;
     try {
       const loaded = await listHosts();
       hosts.set(loaded);
@@ -46,10 +48,13 @@
       $activeEntity.kind === 'settings'
   );
   const desktopCardView = $derived($page.url.searchParams.get('view') === 'desktop-card');
+  const sftpCardView = $derived($page.url.searchParams.get('view') === 'sftp-card');
 </script>
 
 {#if desktopCardView}
   <DesktopCardWidget />
+{:else if sftpCardView}
+  <SftpCardWidget hostName={$page.url.searchParams.get('host') ?? ''} />
 {:else}
 <AppShell>
   <div class="relative h-full">

@@ -95,7 +95,9 @@ body {
 /* The frameless desktop card supplies its own rounded surface. Keeping the page
    itself transparent removes the rectangular halo behind those rounded corners. */
 :root[data-window='desktop-card'],
-:root[data-window='desktop-card'] body {
+:root[data-window='desktop-card'] body,
+:root[data-window='sftp-card'],
+:root[data-window='sftp-card'] body {
   background: transparent;
 }
 

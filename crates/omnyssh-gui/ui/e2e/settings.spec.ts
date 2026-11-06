@@ -24,7 +24,7 @@ async function boot(page: Page, opts: { fireUpdateOnBoot: boolean }): Promise<vo
       const state = {
         hosts: hosts.map((h) => ({ ...h })),
         updateConfig: { checkOnStartup: true, skipVersion: '' } as Record<string, unknown>,
-        desktop: { closeBehavior: 'tray', trayClickBehavior: 'openMain', shortcut: 'Control+Shift+H', shortcutRegistered: true, shortcutError: null } as Record<string, unknown>,
+        desktop: { closeBehavior: 'tray', trayClickBehavior: 'openMain', sftpOpenMode: 'main', sftpCardCloseOnBlur: true, shortcut: 'Control+Shift+H', shortcutRegistered: true, shortcutError: null } as Record<string, unknown>,
         terminalMode: 'default'
       };
       const win = window as unknown as Record<string, unknown>;
@@ -194,4 +194,24 @@ test('desktop behavior changes apply live; shortcut conflict preserves the old c
   await page.getByRole('button', { name: 'Restore default', exact: true }).click();
   await expect(page.getByLabel('Hide / show shortcut', { exact: true })).toHaveValue('Ctrl+Shift+H');
   await page.screenshot({ path: test.info().outputPath('settings.png'), fullPage: true });
+});
+
+test('SFTP card mode and outside-click behavior save independently', async ({ page }) => {
+  await boot(page, { fireUpdateOnBoot: false });
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const main = page.getByRole('button', { name: 'Main window', exact: true });
+  const card = page.getByRole('button', { name: 'Separate card', exact: true });
+  const dismiss = page.getByRole('switch', { name: 'Close when clicking outside the card', exact: true });
+  await expect(main).toHaveAttribute('aria-pressed', 'true');
+  await expect(dismiss).toBeChecked();
+  await expect(dismiss).toBeDisabled();
+  await card.click();
+  await expect(dismiss).toBeEnabled();
+  await dismiss.uncheck();
+  await expect.poll(() => page.evaluate(() => (window as any).__savedDesktopSettings.sftpCardCloseOnBlur)).toBe(false);
+  await main.click();
+  await card.click();
+  await expect(dismiss).not.toBeChecked();
+  await dismiss.check();
+  await expect.poll(() => page.evaluate(() => (window as any).__savedDesktopSettings.sftpCardCloseOnBlur)).toBe(true);
 });

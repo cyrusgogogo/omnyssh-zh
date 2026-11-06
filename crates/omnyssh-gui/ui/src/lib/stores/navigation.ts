@@ -2,7 +2,8 @@ import { get } from 'svelte/store';
 import { activeEntity } from './activeEntity';
 import { sessions, type Session, type SessionKind } from './sessions';
 import { terminalOpenMode } from './settings';
-import { openSystemTerminal } from '$lib/ipc/commands';
+import { openSystemTerminal, openSftpCard } from '$lib/ipc/commands';
+import { desktopSettings } from './desktopSettings';
 import { lastError } from './notifications';
 
 // Composed navigation actions that keep the sessions list and the active entity in
@@ -15,8 +16,14 @@ export function spawnSession(kind: SessionKind, hostName: string): Session {
   return session;
 }
 
-/** Apply the user's terminal-open preference while keeping SFTP inside OmnySSH. */
+/** Apply the user's preferred window for host actions. */
 export function openHostSession(kind: SessionKind, hostName: string): Session | null {
+  if (kind === 'sftp' && get(desktopSettings).sftpOpenMode === 'card') {
+    void openSftpCard(hostName).catch((error) =>
+      lastError.set(error instanceof Error ? error.message : String(error))
+    );
+    return null;
+  }
   if (kind === 'terminal' && get(terminalOpenMode) === 'system') {
     void openSystemTerminal(hostName).catch((error) =>
       lastError.set(error instanceof Error ? error.message : String(error))

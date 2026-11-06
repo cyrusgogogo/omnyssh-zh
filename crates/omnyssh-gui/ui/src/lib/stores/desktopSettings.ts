@@ -3,20 +3,22 @@ import { listen } from '@tauri-apps/api/event';
 import type { DesktopSettingsDto } from '$lib/bindings';
 import { loadDesktopSettings, saveDesktopSettings } from '$lib/ipc/commands';
 
-export const desktopSettings = writable<DesktopSettingsDto>({
+const defaults: DesktopSettingsDto = {
   closeBehavior: 'tray', trayClickBehavior: 'openMain', shortcut: 'Control+Shift+H',
+  sftpOpenMode: 'main', sftpCardCloseOnBlur: true,
   shortcutRegistered: false, shortcutError: null
-});
+};
+export const desktopSettings = writable<DesktopSettingsDto>({ ...defaults });
 
 export async function startDesktopSettings(): Promise<() => void> {
   let version = 0;
   const off = await listen<DesktopSettingsDto>('desktop-settings-changed', ({ payload }) => {
     version++;
-    desktopSettings.set(payload);
+    desktopSettings.set({ ...defaults, ...payload });
   });
   try {
     const saved = await loadDesktopSettings();
-    if (version === 0 && saved) desktopSettings.set(saved);
+    if (version === 0 && saved) desktopSettings.set({ ...defaults, ...saved });
     return off;
   } catch (error) { off(); throw error; }
 }

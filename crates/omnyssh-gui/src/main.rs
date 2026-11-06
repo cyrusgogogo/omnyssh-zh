@@ -27,6 +27,7 @@ use commands::sftp::{
     list_local_dir, preview_local_file, sftp_close, sftp_delete, sftp_download, sftp_list,
     sftp_mkdir, sftp_open, sftp_preview, sftp_rename, sftp_upload,
 };
+use commands::sftp_card::{close_sftp_card, is_sftp_card, open_sftp_card, SftpCardState};
 use commands::snippets::{delete_snippet, execute_snippet, list_snippets, save_snippet};
 use commands::ssh_config::{
     apply_ssh_config, get_ssh_config_snapshot, preview_host_ssh_config, preview_ssh_config,
@@ -213,6 +214,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
             sftp_delete,
             sftp_preview,
             sftp_close,
+            open_sftp_card,
+            close_sftp_card,
             list_local_dir,
             preview_local_file,
             start_key_setup,
@@ -350,6 +353,7 @@ fn main() {
     let app = tauri::Builder::default()
         .manage(DesktopCardState::default())
         .manage(DesktopPreferences::default())
+        .manage(SftpCardState::default())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         // Persists UI prefs (theme, sidebar collapse, refresh interval) from the
         // frontend JS API — no bespoke command (tech-gui.md §4.2, §5.1).
@@ -364,6 +368,7 @@ fn main() {
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(WINDOW_STATE_FLAGS)
                 .with_denylist(&[commands::desktop_card::DESKTOP_CARD_WINDOW_LABEL])
+                .with_filter(|label| !is_sftp_card(label))
                 .build(),
         )
         .invoke_handler(builder.invoke_handler())
@@ -387,6 +392,24 @@ fn main() {
             }
         })
         .on_window_event(|window, event| {
+            if is_sftp_card(window.label()) {
+                let app = window.app_handle();
+                let cards = app.state::<SftpCardState>();
+                match event {
+                    tauri::WindowEvent::Focused(focused) => {
+                        let dismiss = cards.focus_changed(window.label(), *focused);
+                        if dismiss
+                            && app.state::<DesktopPreferences>().snapshot().sftp_card_close_on_blur
+                        {
+                            let _ = window.close();
+                        }
+                    }
+                    tauri::WindowEvent::Destroyed => {
+                        cards.destroyed(window.label(), &app.state::<GuiState>());
+                    }
+                    _ => {}
+                }
+            }
             if matches!(event, tauri::WindowEvent::Destroyed)
                 && window.label() == commands::desktop_card::DESKTOP_CARD_WINDOW_LABEL
                 && !EXIT_REQUESTED.load(std::sync::atomic::Ordering::Acquire)

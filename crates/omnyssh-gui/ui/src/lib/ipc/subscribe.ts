@@ -36,12 +36,7 @@ export async function startEventBridge(): Promise<() => void> {
     offs.push(await events.servicesFailed.listen((e) => applyServicesFailed(e.payload)));
     offs.push(await events.snippetResult.listen((e) => applySnippetResult(e.payload)));
     offs.push(await events.terminalExited.listen((e) => applyTerminalExited(e.payload.sessionId)));
-    offs.push(await events.sftpConnected.listen((e) => applySftpConnected(e.payload)));
-    offs.push(await events.sftpDirListed.listen((e) => applySftpDirListed(e.payload)));
-    offs.push(await events.sftpOpDone.listen((e) => applySftpOpDone(e.payload)));
-    offs.push(await events.sftpDisconnected.listen((e) => applySftpDisconnected(e.payload)));
-    offs.push(await events.filePreview.listen((e) => applyFilePreview(e.payload)));
-    offs.push(await events.transferProgress.listen((e) => applyTransferProgress(e.payload)));
+    await subscribeSftpEvents(offs);
     offs.push(await events.keySetupProgress.listen((e) => applyKeySetupProgress(e.payload)));
     offs.push(await events.keySetupComplete.listen((e) => applyKeySetupComplete(e.payload)));
     offs.push(await events.keySetupFailed.listen((e) => applyKeySetupFailed(e.payload)));
@@ -52,5 +47,22 @@ export async function startEventBridge(): Promise<() => void> {
     offs.forEach((off) => off());
     throw err;
   }
+  return () => offs.forEach((off) => off());
+}
+
+async function subscribeSftpEvents(offs: UnlistenFn[]): Promise<void> {
+  offs.push(await events.sftpConnected.listen((e) => applySftpConnected(e.payload)));
+  offs.push(await events.sftpDirListed.listen((e) => applySftpDirListed(e.payload)));
+  offs.push(await events.sftpOpDone.listen((e) => applySftpOpDone(e.payload)));
+  offs.push(await events.sftpDisconnected.listen((e) => applySftpDisconnected(e.payload)));
+  offs.push(await events.filePreview.listen((e) => applyFilePreview(e.payload)));
+  offs.push(await events.transferProgress.listen((e) => applyTransferProgress(e.payload)));
+}
+
+/** Card windows subscribe before mounting SftpView, so the first listing cannot be missed. */
+export async function startSftpEventBridge(): Promise<() => void> {
+  const offs: UnlistenFn[] = [];
+  try { await subscribeSftpEvents(offs); }
+  catch (error) { offs.forEach((off) => off()); throw error; }
   return () => offs.forEach((off) => off());
 }

@@ -258,6 +258,22 @@ async sftpClose(sessionId: number) : Promise<Result<null, CommandError>> {
     else return { status: "error", error: e  as any };
 }
 },
+async openSftpCard(hostName: string) : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("open_sftp_card", { hostName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async closeSftpCard() : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("close_sftp_card") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 /**
  * List a local directory (tech-gui.md §4.2). Returns directly off the async worker;
  * the GUI never emits `LocalDirListed` (§4.3). The core prepends a `..` entry and
@@ -552,8 +568,8 @@ async setDesktopCardCompact(compact: boolean, hostCount: number, expandedAbove: 
 },
 /**
  * Open the selected host without creating sessions in the compact-card webview.
- * System-terminal actions can launch directly; embedded terminals and SFTP must
- * live in the main webview so closing the card cannot leave an invisible tab.
+ * System terminals and SFTP cards launch directly. Embedded sessions live in the
+ * main webview so closing the host card cannot leave an invisible tab.
  */
 async openDesktopCardHost(hostName: string, kind: string) : Promise<Result<null, CommandError>> {
     try {
@@ -639,7 +655,7 @@ export type CommandError = { code: string; args: Partial<{ [key in string]: stri
  * frontend consumes a discriminated union keyed on `kind`.
  */
 export type ConnectionStatusDto = { kind: "unknown" } | { kind: "connecting" } | { kind: "connected" } | { kind: "failed"; message: string }
-export type DesktopSettingsDto = { closeBehavior: CloseBehavior; trayClickBehavior: TrayClickBehavior; shortcut: string; shortcutRegistered: boolean; shortcutError: string | null }
+export type DesktopSettingsDto = { closeBehavior: CloseBehavior; trayClickBehavior: TrayClickBehavior; sftpOpenMode: SftpOpenMode; sftpCardCloseOnBlur: boolean; shortcut: string; shortcutRegistered: boolean; shortcutError: string | null }
 export type DiscoveredSshKeyDto = { privatePath: string; publicPath: string; suggestedName: string; keyType: string }
 /**
  * A background error surfaced to the user.
@@ -649,7 +665,7 @@ export type Error = { message: string }
  * A file or directory in an SFTP panel listing (tech-gui.md §4.1). Maps from the
  * core `FileEntry`; `path` is the absolute path the frontend marks entries by.
  */
-export type FileEntryDto = { name: string; path: string; size: number; isDir: boolean }
+export type FileEntryDto = { name: string; path: string; size: number; isDir: boolean; modified?: number | null }
 /**
  * Preview bytes for a remote file (tech-gui.md §4.3). Stamped with `sessionId`; the
  * core `FilePreviewReady` carries only the path + content (§3.4).
@@ -780,6 +796,7 @@ export type SftpDisconnected = { sessionId: number; reason: string }
  * §4.3). The core's `Result<(), String>` is flattened to `ok` + an optional `error`.
  */
 export type SftpOpDone = { sessionId: number; ok: boolean; error?: string | null }
+export type SftpOpenMode = "main" | "card"
 /**
  * A saved command snippet as the frontend sees it (tech-gui.md §4.1). Crosses the
  * boundary both ways — outbound for `list_snippets`, inbound for `save_snippet` —

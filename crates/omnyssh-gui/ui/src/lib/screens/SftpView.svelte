@@ -293,6 +293,7 @@
   {:else}
     <div class="grid min-h-0 flex-1 grid-cols-2 divide-x divide-default">
       <SftpPane
+        side="local"
         title={$t('common-local')}
         pane={view.local}
         onNavigate={(e) => navigate('local', e)}
@@ -323,6 +324,7 @@
       </SftpPane>
 
       <SftpPane
+        side="remote"
         title={session.hostName}
         pane={view.remote}
         onNavigate={(e) => navigate('remote', e)}

@@ -136,6 +136,16 @@ export async function closeDesktopCard(): Promise<void> {
   if (res.status === 'error') throw new Error(formatCommandError(res.error));
 }
 
+export async function openSftpCard(hostName: string): Promise<void> {
+  const res = await commands.openSftpCard(hostName);
+  if (res.status === 'error') throw new Error(formatCommandError(res.error));
+}
+
+export async function closeSftpCard(): Promise<void> {
+  const res = await commands.closeSftpCard();
+  if (res.status === 'error') throw new Error(formatCommandError(res.error));
+}
+
 export async function getSshConfigSnapshot(): Promise<SshConfigSnapshotDto> {
   const res = await commands.getSshConfigSnapshot();
   if (res.status === 'error') throw new Error(formatCommandError(res.error));

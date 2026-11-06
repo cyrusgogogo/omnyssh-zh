@@ -5,6 +5,7 @@
   import { startEventBridge } from '$lib/ipc/subscribe';
   import { reloadHosts, refreshMetrics } from '$lib/ipc/commands';
   import { startDesktopSettings } from '$lib/stores/desktopSettings';
+  import { sftpListing } from '$lib/stores/sftpListing';
   import { theme } from '$lib/stores/theme';
   import { sidebarCollapsed } from '$lib/stores/ui';
   import { streamerMode } from '$lib/stores/streamer';
@@ -22,6 +23,9 @@
     let stopDesktopCardAction: (() => void) | undefined;
     let disposed = false;
     const desktopCardView = new URLSearchParams(window.location.search).get('view') === 'desktop-card';
+    const sftpCardView = new URLSearchParams(window.location.search).get('view') === 'sftp-card';
+    const secondaryView = desktopCardView || sftpCardView;
+    void sftpListing.hydrate();
     const stopScrollbars = installAutoHideScrollbars();
     // Reconcile the persisted prefs with their canonical tauri-plugin-store values;
     // the synchronous localStorage mirrors already seeded the first paint (§5.1, §2).
@@ -30,14 +34,14 @@
     void startDesktopSettings().then((off) => {
       if (disposed) off(); else stopDesktopSettings = off;
     }).catch(() => {});
-    if (!desktopCardView) void sidebarCollapsed.hydrate();
+    if (!secondaryView) void sidebarCollapsed.hydrate();
     void streamerMode.hydrate();
-    if (!desktopCardView) {
+    if (!secondaryView) {
       void refreshInterval.hydrate();
       void terminalOpenMode.hydrate().catch(() => {});
     }
     void language.hydrate();
-    if (!desktopCardView) {
+    if (!secondaryView) {
       void listen<{ hostName: string; kind: SessionKind }>(
         'desktop-card-open-host',
         ({ payload }) => openHostSession(payload.kind, payload.hostName)
@@ -49,7 +53,7 @@
         .catch(() => {});
     }
     // Force a metric refresh on the user's interval; re-arms when the interval changes.
-    const stopRefresh = desktopCardView
+    const stopRefresh = secondaryView
       ? () => {}
       : driveMetricsRefresh(() => {
           void refreshMetrics().catch(() => {});
@@ -57,7 +61,7 @@
     // No-op outside Tauri (e.g. a plain `vite preview`); the shell still mounts.
     // Dispose even if the layout unmounts before the subscription resolves. Start
     // the pollers only once listeners are attached, so no status event is missed.
-    startEventBridge()
+    if (!sftpCardView) startEventBridge()
       .then((off) => {
         if (disposed) return off();
         stop = off;

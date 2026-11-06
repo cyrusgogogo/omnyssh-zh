@@ -28,11 +28,21 @@ pub enum TrayClickBehavior {
     OpenMain,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum SftpOpenMode {
+    #[default]
+    Main,
+    Card,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(default, rename_all = "camelCase")]
 pub struct DesktopSettingsDto {
     pub close_behavior: CloseBehavior,
     pub tray_click_behavior: TrayClickBehavior,
+    pub sftp_open_mode: SftpOpenMode,
+    pub sftp_card_close_on_blur: bool,
     // Empty disables the global shortcut.
     pub shortcut: String,
     pub shortcut_registered: bool,
@@ -44,6 +54,8 @@ impl Default for DesktopSettingsDto {
         Self {
             close_behavior: CloseBehavior::Tray,
             tray_click_behavior: TrayClickBehavior::OpenMain,
+            sftp_open_mode: SftpOpenMode::Main,
+            sftp_card_close_on_blur: true,
             shortcut: "Control+Shift+H".into(),
             shortcut_registered: false,
             shortcut_error: None,
@@ -229,6 +241,8 @@ mod tests {
         let settings: DesktopSettingsDto = serde_json::from_str("{}").unwrap();
         assert_eq!(settings.close_behavior, CloseBehavior::Tray);
         assert_eq!(settings.tray_click_behavior, TrayClickBehavior::OpenMain);
+        assert_eq!(settings.sftp_open_mode, SftpOpenMode::Main);
+        assert!(settings.sftp_card_close_on_blur);
         assert_eq!(settings.shortcut, "Control+Shift+H");
     }
 
@@ -240,5 +254,19 @@ mod tests {
         assert!(parse_shortcut("Control+Shift+H").unwrap().is_some());
         assert!(parse_shortcut("Alt+KeyJ").unwrap().is_some());
         assert!(parse_shortcut("Control+Invalid").is_err());
+    }
+
+    #[test]
+    fn sftp_card_preferences_round_trip_and_preserve_existing_fields() {
+        let settings: DesktopSettingsDto = serde_json::from_str(
+            r#"{"sftpOpenMode":"card","sftpCardCloseOnBlur":false,"shortcut":"Alt+KeyJ"}"#,
+        )
+        .unwrap();
+        assert_eq!(settings.sftp_open_mode, SftpOpenMode::Card);
+        assert!(!settings.sftp_card_close_on_blur);
+        let json = serde_json::to_value(&settings).unwrap();
+        assert_eq!(json["sftpOpenMode"], "card");
+        assert_eq!(json["sftpCardCloseOnBlur"], false);
+        assert_eq!(json["shortcut"], "Alt+KeyJ");
     }
 }
