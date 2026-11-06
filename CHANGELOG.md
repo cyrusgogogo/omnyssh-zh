@@ -9,6 +9,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 1.0.9 — 2026-11-06
+
 ### Features
 - SFTP file lists now show file types and modification times. Both panes support name, modification time, type and size sorting in either direction, remember their own choices, and keep the parent directory and folders first.
 - Expanded desktop host cards automatically hide their upper-right window controls until hovered or focused with the keyboard.
