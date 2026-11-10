@@ -9,6 +9,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 1.0.11 — 2026-11-10
+
 ### Features
 - Desktop updates now download inside OmnySSH, show download and installation progress, verify the publisher's signature, and restart after installation. Failed updates can be retried without opening a browser.
 - Release builds now produce signed update packages and a platform-specific manifest for Windows, macOS and Linux, with signature checks before publication.
