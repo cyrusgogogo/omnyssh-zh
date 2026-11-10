@@ -193,11 +193,11 @@ jobs:
         include:
           - target:  aarch64-apple-darwin
             runner:  macos-latest
-            bundles: dmg
+            bundles: app,dmg
             asset:   OmnySSH-aarch64-apple-darwin
           - target:  x86_64-apple-darwin
             runner:  macos-latest
-            bundles: dmg
+            bundles: app,dmg
             asset:   OmnySSH-x86_64-apple-darwin
           - target:  x86_64-unknown-linux-gnu
             runner:  ubuntu-22.04
@@ -310,6 +310,9 @@ jobs:
           # stops emitting one fails the dry run instead of only the tag.
           for format in ${BUNDLES//,/ }; do
             case "$format" in
+              # The app target is required for Tauri to generate .app.tar.gz;
+              # its archive and signature are collected by updater-release below.
+              app)      test -d "$out/macos/OmnySSH.app" ;;
               dmg)      collect dmg      .dmg      "${{ matrix.asset }}.dmg" ;;
               appimage) collect appimage .AppImage "${{ matrix.asset }}.AppImage" ;;
               deb)      collect deb      .deb      "${{ matrix.asset }}.deb" ;;
