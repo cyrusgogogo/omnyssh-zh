@@ -26,7 +26,7 @@ jobs:
         run: bash scripts/hygiene-guard.test.sh
 
       - name: Test automatic version preparation
-        run: node --test scripts/prepare-release.test.mjs
+        run: node --test scripts/prepare-release.test.mjs scripts/updater-release.test.mjs
 
   build-and-test:
     name: Build & Test (${{ matrix.os }})

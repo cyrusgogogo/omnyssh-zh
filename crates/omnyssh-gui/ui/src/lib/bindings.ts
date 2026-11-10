@@ -275,6 +275,18 @@ async closeSftpCard() : Promise<Result<null, CommandError>> {
 }
 },
 /**
+ * Called once the card shell and its event listeners have mounted. Serialize
+ * with creation because a fast page can invoke this before `build` returns.
+ */
+async readySftpCard() : Promise<Result<null, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("ready_sftp_card") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * List a local directory (tech-gui.md §4.2). Returns directly off the async worker;
  * the GUI never emits `LocalDirListed` (§4.3). The core prepends a `..` entry and
  * sorts dirs-first.
@@ -326,8 +338,7 @@ async refreshMetrics() : Promise<Result<null, CommandError>> {
 }
 },
 /**
- * Query GitHub for a newer release (tech-gui.md §4.2). `None` means up to date — the
- * core swallows network/parse errors so a failed check never disrupts.
+ * Check the signed desktop manifest for this OS, architecture and package format.
  */
 async checkUpdate() : Promise<Result<UpdateInfoDto | null, CommandError>> {
     try {
@@ -338,22 +349,17 @@ async checkUpdate() : Promise<Result<UpdateInfoDto | null, CommandError>> {
 }
 },
 /**
- * Download and install the latest desktop bundle via `tauri-plugin-updater` (tech-gui.md
- * §4.3/§3.7). Until Stage 5 configures the updater endpoints + signing key the plugin
- * has nothing to point at, so this reports "not available yet" rather than touching the
- * running binary.
+ * Download, verify the publisher's signature, install, then restart. Failures
+ * leave the current app running and release the lock so the user can retry.
  */
-async installUpdate() : Promise<Result<null, CommandError>> {
+async installUpdate(version: string, onProgress: TAURI_CHANNEL<UpdateProgress>) : Promise<Result<null, CommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("install_update") };
+    return { status: "ok", data: await TAURI_INVOKE("install_update", { version, onProgress }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-/**
- * Read the update-checker preferences from the shared config (tech-gui.md §4.3).
- */
 async loadUpdateConfig() : Promise<Result<UpdateConfigDto, CommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("load_update_config") };
@@ -362,10 +368,6 @@ async loadUpdateConfig() : Promise<Result<UpdateConfigDto, CommandError>> {
     else return { status: "error", error: e  as any };
 }
 },
-/**
- * Persist the update-checker preferences to the shared config's `[update]` section
- * (tech-gui.md §4.3). Writes off the async worker — parse + atomic write are blocking.
- */
 async saveUpdateConfig(config: UpdateConfigDto) : Promise<Result<null, CommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("save_update_config", { config }) };
@@ -873,6 +875,7 @@ export type UpdateConfigDto = { checkOnStartup: boolean; skipVersion: string }
  * none is invented (§4.1).
  */
 export type UpdateInfoDto = { version: string; url: string; tag: string; canSelfUpdate: boolean }
+export type UpdateProgress = { phase: "checking" } | { phase: "downloading"; received: number; total: number | null } | { phase: "verifying" } | { phase: "installing" } | { phase: "restarting" }
 
 /** tauri-specta globals **/
 

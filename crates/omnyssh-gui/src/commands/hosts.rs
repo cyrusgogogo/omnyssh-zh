@@ -36,9 +36,7 @@ pub async fn reload_hosts(app: AppHandle, state: State<'_, GuiState>) -> Result<
     // doing it before the fallible load means a malformed config can't also suppress the
     // update banner for the session.
     if state.claim_update_check() {
-        tauri::async_runtime::spawn(crate::commands::update::startup_update_check(
-            state.engine_sender(),
-        ));
+        tauri::async_runtime::spawn(crate::commands::update::startup_update_check(app.clone()));
     }
     // Parsing hosts.toml + ~/.ssh/config is blocking I/O — keep it off the async
     // worker so in-flight commands and the event bridge don't stall.

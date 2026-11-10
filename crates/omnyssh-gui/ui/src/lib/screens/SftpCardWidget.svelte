@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { Icon } from '$lib/theme';
   import { t } from '$lib/i18n';
-  import { closeSftpCard } from '$lib/ipc/commands';
+  import { closeSftpCard, readySftpCard } from '$lib/ipc/commands';
   import { startSftpEventBridge } from '$lib/ipc/subscribe';
   import { sessions, type Session } from '$lib/stores/sessions';
   import { lastError } from '$lib/stores/notifications';
@@ -17,10 +17,12 @@
   onMount(() => {
     let disposed = false;
     let stop: (() => void) | undefined;
-    void startSftpEventBridge().then((off) => {
+    void startSftpEventBridge().then(async (off) => {
       if (disposed) return off();
       stop = off;
       session = sessions.spawn('sftp', hostName);
+      await tick();
+      if (!disposed) await readySftpCard();
     }).catch((value) => error = message(value));
     return () => {
       disposed = true;

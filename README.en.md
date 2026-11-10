@@ -166,6 +166,12 @@ crates/omnyssh        TUI application (binary: omny)
 crates/omnyssh-gui    Tauri desktop application
 ```
 
+## Desktop updates
+
+**Download and update** downloads inside OmnySSH, verifies the publisher's signature, installs the desktop package and restarts. Restarting closes active terminal and SFTP connections. Windows uses the installer; macOS replaces the app bundle; Linux keeps the AppImage, deb or rpm format. The OS may request administrator authorization. Versions up to `v1.0.9` need one manual upgrade to a release containing this updater.
+
+Release maintainers must generate and back up a signing key with `npx @tauri-apps/cli@^2 signer generate -w omnyssh-updater.tauri.key`. In the repository's **Settings → Secrets and variables → Actions**, set the `TAURI_SIGNING_PRIVATE_KEY` secret to the private file contents, the `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secret to its password, and the `TAURI_UPDATER_PUBLIC_KEY` variable to the `.pub` file contents. Never commit the private key. Keep using the same key for later releases. The workflow embeds the public key and verifies every package before publishing; missing keys or invalid signatures stop the release.
+
 ## License
 
 Distributed under the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). This edition contains modifications to upstream OmnySSH; contributions are accepted under the same license.

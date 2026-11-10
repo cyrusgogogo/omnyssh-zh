@@ -35,10 +35,9 @@ specta = { version = "=2.0.0-rc.22", features = ["derive", "function"] }
 specta-typescript = "=0.0.9"
 tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
 tauri-plugin-store = "2.4.3"
-# Desktop self-update (tech-gui.md §4.3/§3.7). Endpoints + signing key are configured in
-# Stage 5; the plugin is wired here so `install_update` targets it, never the core's TUI
-# self-replace.
+# Desktop updater verifies publisher signatures before replacing a GUI bundle.
 tauri-plugin-updater = "2"
+semver = "1"
 # Opens external URLs (the GitHub repo + Telegram channel from the support dialog) in
 # the user's default browser; the webview itself must never navigate away from the app.
 tauri-plugin-opener = "2"

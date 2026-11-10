@@ -55,7 +55,8 @@
   "plugins": {
     "updater": {
       "pubkey": "",
-      "endpoints": []
+      "endpoints": ["https://github.com/cyrusgogogo/omnyssh-zh/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
     }
   }
 }

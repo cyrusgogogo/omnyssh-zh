@@ -21,7 +21,8 @@ import type {
   SnippetDto,
   TerminalBytes,
   UpdateConfigDto,
-  UpdateInfoDto
+  UpdateInfoDto,
+  UpdateProgress
 } from '$lib/bindings';
 
 export async function getSshKeySnapshot(): Promise<SshKeySnapshotDto> {
@@ -138,6 +139,11 @@ export async function closeDesktopCard(): Promise<void> {
 
 export async function openSftpCard(hostName: string): Promise<void> {
   const res = await commands.openSftpCard(hostName);
+  if (res.status === 'error') throw new Error(formatCommandError(res.error));
+}
+
+export async function readySftpCard(): Promise<void> {
+  const res = await commands.readySftpCard();
   if (res.status === 'error') throw new Error(formatCommandError(res.error));
 }
 
@@ -383,10 +389,9 @@ export async function checkUpdate(): Promise<UpdateInfoDto | null> {
   return res.data;
 }
 
-/** Download and install the latest desktop bundle (tech-gui.md §4.3). Fully wired once
- *  Stage 5 configures the updater endpoints; until then it reports "not available yet". */
-export async function installUpdate(): Promise<void> {
-  const res = await commands.installUpdate();
+/** Install the selected signed desktop release and report progress to its caller. */
+export async function installUpdate(version: string, onProgress: Channel<UpdateProgress>): Promise<void> {
+  const res = await commands.installUpdate(version, onProgress);
   if (res.status === 'error') throw new Error(formatCommandError(res.error));
 }
 

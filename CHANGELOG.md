@@ -9,6 +9,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Features
+- Desktop updates now download inside OmnySSH, show download and installation progress, verify the publisher's signature, and restart after installation. Failed updates can be retried without opening a browser.
+- Release builds now produce signed update packages and a platform-specific manifest for Windows, macOS and Linux, with signature checks before publication.
+
+### Fixes
+- SFTP cards are explicitly shown after native creation instead of depending on the page-load callback. Focus changes during startup cannot dismiss a card before its page is ready.
+
 ## 1.0.9 — 2026-11-06
 
 ### Features

@@ -85,6 +85,9 @@ async function boot(page: Page, path = '/'): Promise<void> {
             case 'close_sftp_card':
               win.__cardClosed = true;
               return Promise.resolve(null);
+            case 'ready_sftp_card':
+              win.__sftpCardReady = true;
+              return Promise.resolve(null);
             case 'list_hosts':
               return Promise.resolve(hosts);
             case 'reload_hosts':
@@ -274,6 +277,7 @@ test('standalone card browses both panes and Escape closes dialogs before the ca
   await page.setViewportSize({ width: 720, height: 480 });
   await boot(page, '/?view=sftp-card&host=web-1');
   await expect(page.getByRole('main', { name: 'SFTP card' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __sftpCardReady?: boolean }).__sftpCardReady)).toBe(true);
   await expect(page.getByRole('region', { name: 'Local' }).getByText('notes.txt')).toBeVisible();
   await expect(page.getByRole('region', { name: 'web-1' }).getByText('config.yml')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toHaveCount(0);

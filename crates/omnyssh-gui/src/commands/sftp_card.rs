@@ -24,6 +24,7 @@ struct CardWindow {
     host_name: String,
     sessions: HashSet<u64>,
     focused: bool,
+    ready: bool,
 }
 
 pub fn is_sftp_card(label: &str) -> bool {
@@ -51,8 +52,9 @@ impl SftpCardState {
         let Some(card) = windows.get_mut(label) else {
             return false;
         };
-        // Initial creation can report unfocused before the page is ready.
-        let should_close = card.focused && !focused;
+        // WebView2 can transfer focus during creation, before its content has
+        // mounted. Such a transition must never destroy the opening window.
+        let should_close = card.ready && card.focused && !focused;
         card.focused = focused;
         should_close
     }
@@ -111,6 +113,7 @@ pub async fn open_sftp_card(
             host_name: host_name.clone(),
             sessions: HashSet::new(),
             focused: false,
+            ready: false,
         },
     );
     let result = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(path.into()))
@@ -125,10 +128,50 @@ pub async fn open_sftp_card(
         .visible(false)
         .center()
         .build();
-    if let Err(build_error) = result {
+    let window = result.map_err(|build_error| {
         cards.destroyed(&label, &state);
-        return Err(error(build_error));
+        error(build_error)
+    })?;
+    // Do not rely on a page-load callback to reveal a newly created WebView2
+    // window. The callback may run before the window is registered with Tauri.
+    if let Err(show_error) = window.show().and_then(|_| window.set_focus()) {
+        let _ = window.close();
+        cards.destroyed(&label, &state);
+        return Err(error(show_error));
     }
+    Ok(())
+}
+
+/// Called once the card shell and its event listeners have mounted. Serialize
+/// with creation because a fast page can invoke this before `build` returns.
+#[tauri::command]
+#[specta::specta]
+pub async fn ready_sftp_card(app: AppHandle, window: WebviewWindow) -> Result<(), CommandError> {
+    let cards = app.state::<SftpCardState>();
+    let _operation = cards.operation.lock().await;
+    if cards
+        .windows
+        .lock()
+        .unwrap()
+        .get(window.label())
+        .ok_or_else(|| error("SFTP card was closed"))?
+        .ready
+    {
+        return Ok(());
+    }
+    // The initial show/focus can precede the OS mapping the window. Reassert it
+    // once, after the shell is usable; subsequent page loads never steal focus.
+    window
+        .show()
+        .and_then(|_| window.set_focus())
+        .map_err(error)?;
+    let focused = window.is_focused().map_err(error)?;
+    let mut windows = cards.windows.lock().unwrap();
+    let card = windows
+        .get_mut(window.label())
+        .ok_or_else(|| error("SFTP card was closed"))?;
+    card.ready = true;
+    card.focused = focused;
     Ok(())
 }
 
@@ -168,8 +211,19 @@ mod tests {
                 host_name: "web-1".into(),
                 sessions: HashSet::new(),
                 focused: false,
+                ready: false,
             },
         );
+        assert!(!state.focus_changed("sftp-card-0", false));
+        assert!(!state.focus_changed("sftp-card-0", true));
+        assert!(!state.focus_changed("sftp-card-0", false));
+        state
+            .windows
+            .lock()
+            .unwrap()
+            .get_mut("sftp-card-0")
+            .unwrap()
+            .ready = true;
         assert!(!state.focus_changed("sftp-card-0", false));
         assert!(!state.focus_changed("sftp-card-0", true));
         assert!(state.focus_changed("sftp-card-0", false));

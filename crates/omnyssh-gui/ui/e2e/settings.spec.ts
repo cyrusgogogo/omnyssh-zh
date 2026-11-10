@@ -75,6 +75,20 @@ async function boot(page: Page, opts: { fireUpdateOnBoot: boolean }): Promise<vo
               return Promise.resolve(null);
             case 'check_update':
               return Promise.resolve({ ...update });
+            case 'install_update': {
+              win.__updateVersion = args.version;
+              win.__installCount = Number(win.__installCount ?? 0) + 1;
+              const channel = args.onProgress as { onmessage: (value: unknown) => void };
+              win.__updateProgress = (value: unknown) => channel.onmessage(value);
+              channel.onmessage({ phase: 'downloading', received: 1024, total: 4096 });
+              return new Promise((resolve, reject) => {
+                win.__finishUpdate = () => resolve(null);
+                win.__failUpdate = () => reject({ code: 'update-install', rawDetail: 'Signature verification failed' });
+              });
+            }
+            case 'plugin:opener|open_url':
+              win.__openedExternalUrl = args.url;
+              return Promise.resolve(null);
             case 'plugin:event|listen': {
               const { event, handler } = args as { event: string; handler: number };
               (listeners[event] ||= []).push(handler);
@@ -146,6 +160,36 @@ test('startup update-available raises the banner; dismiss hides it', async ({ pa
 
   await page.getByRole('button', { name: 'Dismiss update notice' }).click();
   await expect(banner).toHaveCount(0);
+});
+
+test('downloads in the app, shows installation progress and never opens the release page', async ({ page }) => {
+  await boot(page, { fireUpdateOnBoot: true });
+  await page.getByRole('button', { name: 'Download and update' }).click();
+  await expect(page.getByRole('progressbar', { name: 'Downloading…' })).toHaveAttribute('aria-valuenow', '25');
+  await expect(page.getByRole('button', { name: 'Download and update' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Dismiss update notice' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Skip this version' })).toBeDisabled();
+  const request = await page.evaluate(() => {
+    const win = window as unknown as Record<string, unknown>;
+    return { version: win.__updateVersion, count: win.__installCount, external: win.__openedExternalUrl ?? null };
+  });
+  expect(request).toEqual({ version: '2.0.0', count: 1, external: null });
+  for (const [phase, text] of [['verifying', 'Verifying update signature…'], ['installing', 'Installing update…']]) {
+    await page.evaluate((phase) => (window as unknown as { __updateProgress: (value: unknown) => void }).__updateProgress({ phase }), phase);
+    await expect(page.getByText(text, { exact: true })).toBeVisible();
+  }
+  await page.evaluate(() => (window as unknown as { __finishUpdate: () => void }).__finishUpdate());
+  await expect(page.getByText('Restarting OmnySSH…')).toBeVisible();
+});
+
+test('failed updates retain the banner and can be retried', async ({ page }) => {
+  await boot(page, { fireUpdateOnBoot: true });
+  await page.getByRole('button', { name: 'Download and update' }).click();
+  await page.evaluate(() => (window as unknown as { __failUpdate: () => void }).__failUpdate());
+  await expect(page.getByRole('alert').filter({ hasText: 'Signature verification failed' })).toBeVisible();
+  await page.getByRole('button', { name: 'Retry update' }).click();
+  await expect(page.getByRole('progressbar')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __installCount: number }).__installCount)).toBe(2);
 });
 
 test('a settings toggle preserves a skipVersion the banner wrote out-of-band', async ({ page }) => {

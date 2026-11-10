@@ -27,7 +27,9 @@ use commands::sftp::{
     list_local_dir, preview_local_file, sftp_close, sftp_delete, sftp_download, sftp_list,
     sftp_mkdir, sftp_open, sftp_preview, sftp_rename, sftp_upload,
 };
-use commands::sftp_card::{close_sftp_card, is_sftp_card, open_sftp_card, SftpCardState};
+use commands::sftp_card::{
+    close_sftp_card, is_sftp_card, open_sftp_card, ready_sftp_card, SftpCardState,
+};
 use commands::snippets::{delete_snippet, execute_snippet, list_snippets, save_snippet};
 use commands::ssh_config::{
     apply_ssh_config, get_ssh_config_snapshot, preview_host_ssh_config, preview_ssh_config,
@@ -216,6 +218,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             sftp_close,
             open_sftp_card,
             close_sftp_card,
+            ready_sftp_card,
             list_local_dir,
             preview_local_file,
             start_key_setup,
@@ -354,11 +357,12 @@ fn main() {
         .manage(DesktopCardState::default())
         .manage(DesktopPreferences::default())
         .manage(SftpCardState::default())
+        .manage(commands::update::UpdateState::default())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         // Persists UI prefs (theme, sidebar collapse, refresh interval) from the
         // frontend JS API — no bespoke command (tech-gui.md §4.2, §5.1).
         .plugin(tauri_plugin_store::Builder::new().build())
-        // Desktop self-update (tech-gui.md §4.3); endpoints/signing land in Stage 5.
+        // Publisher-signed desktop packages; the release workflow supplies the public key.
         .plugin(tauri_plugin_updater::Builder::new().build())
         // Opens the support dialog's GitHub/Telegram links in the default browser.
         .plugin(tauri_plugin_opener::init())
@@ -379,6 +383,9 @@ fn main() {
             if matches!(payload.event(), PageLoadEvent::Finished) {
                 PAGE_LOADED.store(true, std::sync::atomic::Ordering::Release);
                 let window = webview.window();
+                // SFTP cards are shown after native creation and arm dismissal
+                // after their frontend handshake; page loads must not refocus them.
+                if is_sftp_card(window.label()) { return; }
                 // Reveal once: a later page load must not raise the window over
                 // whatever the user is doing.
                 if !window.is_visible().unwrap_or(false)
