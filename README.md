@@ -172,7 +172,7 @@ crates/omnyssh-gui    Tauri 桌面应用
 
 ## 自动发布
 
-桌面版更新提示中的 **下载并更新** 会在软件内下载、验证签名、安装并自动重启；重启会断开当前终端和 SFTP 连接。Windows 使用安装程序，macOS 更新应用包，Linux 保持原有 AppImage、deb 或 rpm 格式。系统可能要求管理员授权。`v1.0.9` 及更早版本需要先手动安装一次包含此功能的新版本，之后即可使用软件内更新。
+桌面版更新提示中的 **下载并更新** 会在软件内下载、验证签名、安装并自动重启；重启会断开当前终端和 SFTP 连接。Windows 使用安装程序，macOS 更新应用包，Linux 保持原有 AppImage、deb 或 rpm 格式。系统可能要求管理员授权。首次使用需手动安装包含此功能的版本，之后即可使用软件内更新。
 
 首次启用发布签名时，在自己的电脑执行 `npx @tauri-apps/cli@^2 signer generate -w omnyssh-updater.tauri.key`，保存并备份生成的私钥和公钥。在本仓库 **Settings → Secrets and variables → Actions** 中配置：
 
@@ -182,7 +182,7 @@ crates/omnyssh-gui    Tauri 桌面应用
 
 私钥只保存在本地备份和 Actions Secret 中，不要提交到仓库。发布流程会把公钥编入程序，并验证所有更新包与该公钥匹配；缺少密钥或签名验证失败会阻止发布。后续版本须继续使用同一签名密钥。
 
-推送 `main` 后，全部 CI 检查成功会自动递增补丁版本（例如 `1.0.9` → `1.0.9`），将 `CHANGELOG.md` 的 Unreleased 内容转为发布说明，并创建标签、构建各平台安装包和发布 GitHub Release。失败的检查不会触发发布。自动提交会更新远端 `main`，下次开发前请先 `git pull --ff-only`。如果打包失败，在 Actions 中重新运行对应 Release；也可选择该版本标签手动运行 Release，勿移动已公开的标签。
+推送 `main` 后，全部 CI 检查成功会自动递增补丁版本，将 `CHANGELOG.md` 的 Unreleased 内容转为发布说明，并创建标签、构建各平台安装包和发布 GitHub Release。失败的检查不会触发发布。自动提交会更新远端 `main`，下次开发前请先 `git pull --ff-only`。如果打包失败，在 Actions 中重新运行对应 Release；也可选择该版本标签手动运行 Release，勿移动已公开的标签。
 
 ## 许可证
 
